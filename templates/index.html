@@ -43,10 +43,10 @@
                     </ul>
 
                     <div class="tab-content">
+                        <!-- MISSION CONTROL TAB -->
                         <div class="tab-pane fade show active" id="{{sys}}Mission">
-                            <!-- TARGETING ROW -->
                             <div class="row g-2 mb-3">
-                                <div class="col-md-3"><label class="form-label">Drop Time</label><input type="text" id="{{sys}}_drop_time" class="form-control text-primary fw-bold" value="{{ saved[sys]['drop_time'] }}" placeholder="HH:MM:SS"></div>
+                                <div class="col-md-4"><label class="form-label">Drop Time</label><input type="text" id="{{sys}}_drop_time" class="form-control text-primary fw-bold" value="{{ saved[sys]['drop_time'] }}" placeholder="HH:MM:SS"></div>
                                 <div class="col-md-5"><label class="form-label">Timezone</label>
                                     <select id="{{sys}}_timezone" class="form-select">
                                         <option value="America/Los_Angeles">Pacific (PST/PDT)</option>
@@ -55,10 +55,15 @@
                                         <option value="UTC">UTC</option>
                                     </select>
                                 </div>
-                                <div class="col-md-4"><label class="form-label">Workflow YAML</label><input type="text" id="{{sys}}_workflow_file" class="form-control" value="{{ saved[sys]['workflow_file'] }}"></div>
+                                <div class="col-md-3"><label class="form-label">Mode</label>
+                                    <select id="{{sys}}_app_mode" class="form-select">
+                                        <option value="booking" {% if saved[sys]['app_mode']=='booking' %}selected{% endif %}>STRIKE</option>
+                                        <option value="alert" {% if saved[sys]['app_mode']=='alert' %}selected{% endif %}>SCOUT</option>
+                                    </select>
+                                </div>
                             </div>
 
-                            <div class="section-header">Target Selection (Tap to: Monitor > Auto-Book)</div>
+                            <div class="section-header">Target Selection (Tap to cycle: Scout > Strike)</div>
                             <div id="{{sys}}_museum_selector" class="mb-3 p-3 border rounded bg-light min-vh-10"></div>
 
                             <div class="section-header">Auto-Book Days</div>
@@ -76,18 +81,12 @@
                             </div>
                             
                             {% if sys == 'SPL' %}
-                            <div class="mt-2"><label class="form-label text-danger">Patron Email (Required for SPL Booking)</label><input type="text" id="{{sys}}_patron_email" class="form-control border-danger" value="{{ saved[sys]['patron_email'] }}"></div>
+                            <div class="mt-2"><label class="form-label text-danger">Patron Email (Required for SPL)</label><input type="text" id="{{sys}}_patron_email" class="form-control" value="{{ saved[sys]['patron_email'] }}"></div>
                             {% endif %}
 
                             <div class="row g-2 mt-3">
-                                <div class="col-4"><label class="form-label">Mode</label>
-                                    <select id="{{sys}}_app_mode" class="form-select">
-                                        <option value="booking" {% if saved[sys]['app_mode']=='booking' %}selected{% endif %}>STRIKE</option>
-                                        <option value="alert" {% if saved[sys]['app_mode']=='alert' %}selected{% endif %}>SCOUT</option>
-                                    </select>
-                                </div>
-                                <div class="col-4"><label class="form-label">Mins</label><input type="text" id="{{sys}}_strike_minutes" class="form-control" value="{{ saved[sys]['strike_minutes'] }}"></div>
-                                <div class="col-4"><label class="form-label">Offset MS</label><input type="text" id="{{sys}}_offset_ms" class="form-control" value="{{ saved[sys]['offset_ms'] }}"></div>
+                                <div class="col-6"><label class="form-label">Strike Mins</label><input type="text" id="{{sys}}_strike_minutes" class="form-control" value="{{ saved[sys]['strike_minutes'] }}"></div>
+                                <div class="col-6"><label class="form-label">Offset MS</label><input type="text" id="{{sys}}_offset_ms" class="form-control" value="{{ saved[sys]['offset_ms'] }}"></div>
                             </div>
 
                             <div class="d-flex gap-2 mt-4">
@@ -95,19 +94,26 @@
                                 <button onclick="clearSchedule('{{sys}}')" class="btn btn-outline-secondary fw-bold">CLEAR</button>
                                 <button onclick="runNow('{{sys}}')" class="btn btn-danger fw-bold">FIRE NOW</button>
                             </div>
-
-                            <input type="hidden" id="{{sys}}_base_url" value="{{ saved[sys]['base_url'] }}">
                         </div>
 
-                        <div class="tab-pane fade" id="{{sys}Master">
+                        <!-- MASTER LISTS TAB -->
+                        <div class="tab-pane fade" id="{{sys}}Master">
+                            <div class="section-header">Infrastructure Settings</div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-md-8"><label class="form-label">Base URL</label><input type="text" id="{{sys}}_base_url" class="form-control" value="{{ saved[sys]['base_url'] }}"></div>
+                                <div class="col-md-4"><label class="form-label">YAML File</label><input type="text" id="{{sys}}_workflow_file" class="form-control" value="{{ saved[sys]['workflow_file'] }}"></div>
+                            </div>
+
+                            <div class="section-header">Museum Reference Lists</div>
                             <div class="mb-3">
                                 <label class="form-label">Mapping Master (ID:Name or Name:ID)</label>
-                                <textarea id="{{sys}}_raw_config" class="form-control" rows="5" placeholder="SPL Format: Name:ID&#10;KCLS Format: ID:Name">{{ masters[sys]['raw_config'] }}</textarea>
+                                <textarea id="{{sys}}_raw_config" class="form-control" rows="4">{{ masters[sys]['raw_config'] }}</textarea>
+                                <small class="text-muted">SPL: <code>Name:ID</code> | KCLS: <code>ID:Name</code></small>
                             </div>
                             {% if sys == 'SPL' %}
                             <div class="mb-3">
                                 <label class="form-label">Slug Mapping (Name:Slug)</label>
-                                <textarea id="{{sys}}_raw_slugs" class="form-control" rows="5" placeholder="Burke:Burke">{{ masters[sys]['raw_slugs'] }}</textarea>
+                                <textarea id="{{sys}}_raw_slugs" class="form-control" rows="4">{{ masters[sys]['raw_slugs'] }}</textarea>
                             </div>
                             {% endif %}
                             <button onclick="updateMaster('{{sys}}')" class="btn btn-dark btn-sm w-100 fw-bold">REGENERATE SELECTORS</button>
@@ -138,8 +144,10 @@
 
         function updateSelectors(sys) {
             const container = document.getElementById(sys + '_museum_selector');
-            const mapping = parseConfig(document.getElementById(sys + '_raw_config').value);
+            const rawConfig = document.getElementById(sys + '_raw_config').value;
+            const mapping = parseConfig(rawConfig);
             container.innerHTML = '';
+            
             const names = (sys === 'KCLS') ? Object.values(mapping) : Object.keys(mapping);
             const reverse = (sys === 'KCLS') ? Object.fromEntries(Object.entries(mapping).map(([k,v])=>[v,k])) : null;
 
@@ -181,7 +189,7 @@
         }
 
         async function save(sys) {
-            const logBox = document.getElementById(sys + '_log'); logBox.innerText = "Syncing...";
+            const logBox = document.getElementById(sys + '_log'); logBox.innerText = "Syncing Cloud...";
             const rawConfigMap = parseConfig(document.getElementById(sys + '_raw_config').value);
             const rawSlugsMap = sys === 'SPL' ? parseConfig(document.getElementById(sys + '_raw_slugs').value) : null;
             
@@ -215,8 +223,10 @@
                 offset_ms: document.getElementById(sys + '_offset_ms').value
             };
 
-            const res = await fetch('/save', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({system: sys, SECRETS: secrets, timezone: document.getElementById(sys + '_timezone').value})});
-            const out = await res.json(); logBox.innerText = out.status; updateHud();
+            try {
+                const res = await fetch('/save', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({system: sys, SECRETS: secrets, timezone: document.getElementById(sys + '_timezone').value})});
+                const out = await res.json(); logBox.innerText = out.status; updateHud();
+            } catch(e) { logBox.innerText = "Sync Error: " + e.message; }
         }
 
         async function clearSchedule(sys) {
