@@ -103,19 +103,34 @@ def save():
 
     gh_msg = update_gh_secrets(system, s)
     
+# 3. Handle Scheduling
     try:
-        drop_dt = datetime.strptime(s['drop_time'], "%H:%M:%S")
+        t_str = s['drop_time'].strip()
+        # Specific check for hour overflow
+        hour_part = int(t_str.split(':')[0])
+        if hour_part > 23:
+            return jsonify({"status": f"{gh_msg} | FAIL: Hour '{hour_part}' is invalid. Use 00-23."})
+
+        drop_dt = datetime.strptime(t_str, "%H:%M:%S")
         now = datetime.now()
         target_dt = now.replace(hour=drop_dt.hour, minute=drop_dt.minute, second=drop_dt.second, microsecond=0)
-        if target_dt < now: target_dt += timedelta(days=1)
+        
+        # If target time already passed today, assume it's for tomorrow
+        if target_dt < now:
+            target_dt += timedelta(days=1)
+
+        # Trigger 5 minutes before the drop
         trigger_dt = target_dt - timedelta(minutes=5)
         
         job_id = f"trigger_{system}"
         if scheduler.get_job(job_id): scheduler.remove_job(job_id)
         scheduler.add_job(trigger_dispatch, 'date', run_date=trigger_dt, args=[system, s['workflow_file']], id=job_id)
-        return jsonify({"status": f"{gh_msg} | Strike Signal: {trigger_dt.strftime('%H:%M:%S')}"})
-    except:
-        return jsonify({"status": f"{gh_msg} | Error parsing schedule time."})
+        
+        return jsonify({"status": f"{gh_msg} | SIGNAL SET: {trigger_dt.strftime('%H:%M:%S')} UTC"})
+    except ValueError:
+        return jsonify({"status": f"{gh_msg} | FAIL: Use HH:MM:SS format (e.g. 18:00:00)"})
+    except Exception as e:
+        return jsonify({"status": f"{gh_msg} | Sched Error: {str(e)}"})
 
 @app.route('/run_now', methods=['POST'])
 def run_now():
