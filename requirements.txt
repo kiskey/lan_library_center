@@ -3,3 +3,4 @@ requests
 pynacl
 apscheduler
 pytz
+sqlalchemy
