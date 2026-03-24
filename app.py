@@ -1,13 +1,14 @@
-import os, base64, requests, sqlite3, sys, pytz
+import os, base64, requests, sqlite3, sys, pytz, json
 from flask import Flask, render_template, request, jsonify
 from nacl import encoding, public
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
 DB_PATH = "/app/data/sniper.db"
-
-scheduler = BackgroundScheduler()
+jobstores = {'default': SQLAlchemyJobStore(url=f'sqlite:///{DB_PATH}')}
+scheduler = BackgroundScheduler(jobstores=jobstores)
 scheduler.start()
 
 GH_AUTH = {
@@ -36,8 +37,15 @@ def init_db():
                         priority_museums TEXT, auto_book_days TEXT,
                         museum_config TEXT, museum_ids TEXT, strike_minutes TEXT, offset_ms TEXT
                     )''')
+    # Table for the dynamic selection feature
+    conn.execute('''CREATE TABLE IF NOT EXISTS master_lists (
+                        system TEXT PRIMARY KEY,
+                        raw_config TEXT,
+                        raw_slugs TEXT
+                    )''')
     for sys_key in ['SPL', 'KCLS']:
         conn.execute('INSERT OR IGNORE INTO configs (system, workflow_file) VALUES (?, ?)', (sys_key, "actions.yml"))
+        conn.execute('INSERT OR IGNORE INTO master_lists (system, raw_config, raw_slugs) VALUES (?, ?, ?)', (sys_key, "", ""))
     conn.commit()
     conn.close()
 
@@ -54,14 +62,12 @@ def update_gh_secrets(system, s):
     try:
         pk_r = requests.get(f"{url_base}/public-key", headers=headers, timeout=10)
         pk_data = pk_r.json()
-        count = 0
         for key in SECRET_KEYS:
             val = s.get(key.lower(), "")
             if not val: continue 
             encrypted = encrypt_secret(pk_data['key'], str(val))
             requests.put(f"{url_base}/{key}", headers=headers, json={"encrypted_value": encrypted, "key_id": pk_data['key_id']}, timeout=10)
-            count += 1
-        return f"GH Sync: OK ({count})"
+        return "GH Sync: OK"
     except Exception as e:
         return f"GH Error: {str(e)}"
 
@@ -69,19 +75,27 @@ def trigger_dispatch(system, workflow_file):
     auth = GH_AUTH[system]
     url = f"https://api.github.com/repos/{auth['owner']}/{auth['repo']}/actions/workflows/{workflow_file}/dispatches"
     headers = {"Authorization": f"Bearer {auth['token']}", "Accept": "application/vnd.github+json"}
-    try:
-        r = requests.post(url, headers=headers, json={"ref": "main"}, timeout=10)
-        return f"Triggered ({r.status_code})"
-    except Exception as e:
-        return f"Fail: {str(e)}"
+    requests.post(url, headers=headers, json={"ref": "main"}, timeout=10)
 
 @app.route('/')
 def index():
     conn = get_db_connection()
     rows = conn.execute('SELECT * FROM configs').fetchall()
     saved_data = {row['system']: dict(row) for row in rows}
+    masters = conn.execute('SELECT * FROM master_lists').fetchall()
+    master_data = {row['system']: dict(row) for row in masters}
     conn.close()
-    return render_template('index.html', auth=GH_AUTH, saved=saved_data)
+    return render_template('index.html', auth=GH_AUTH, saved=saved_data, masters=master_data)
+
+@app.route('/save_master', methods=['POST'])
+def save_master():
+    data = request.json
+    conn = get_db_connection()
+    conn.execute('UPDATE master_lists SET raw_config=?, raw_slugs=? WHERE system=?', 
+                 (data['raw_config'], data.get('raw_slugs', ''), data['system']))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "Master List Updated"})
 
 @app.route('/save', methods=['POST'])
 def save():
@@ -90,7 +104,6 @@ def save():
     s = data['SECRETS']
     tz_name = data.get('timezone', 'UTC')
     
-    # 1. Update SQLite (Saves the user's local time string)
     conn = get_db_connection()
     conn.execute('''UPDATE configs SET workflow_file=?, base_url=?, lib_user=?, lib_pass=?, 
         patron_email=?, ntfy_topic=?, drop_time=?, app_mode=?, priority_museums=?, 
@@ -102,39 +115,26 @@ def save():
     conn.commit()
     conn.close()
 
-    # 2. Timezone Conversion Logic
     try:
         local_tz = pytz.timezone(tz_name)
-        # Parse user input
         drop_time_obj = datetime.strptime(s['drop_time'], "%H:%M:%S")
         now_local = datetime.now(local_tz)
-        
-        # Build full datetime in local time
-        local_dt = local_tz.localize(datetime(
-            now_local.year, now_local.month, now_local.day, 
-            drop_time_obj.hour, drop_time_obj.minute, drop_time_obj.second
-        ))
-        
-        # Handle day rollover
-        if local_dt < datetime.now(local_tz):
-            local_dt += timedelta(days=1)
-            
-        # Convert to UTC for GitHub Secret & Scheduler
+        local_dt = local_tz.localize(datetime(now_local.year, now_local.month, now_local.day, drop_time_obj.hour, drop_time_obj.minute, drop_time_obj.second))
+        if local_dt < datetime.now(local_tz): local_dt += timedelta(days=1)
         utc_dt = local_dt.astimezone(pytz.UTC)
-        s['drop_time'] = utc_dt.strftime("%H:%M:%S") # Override for GH update
         
-        # Sync to GitHub
-        gh_msg = update_gh_secrets(system, s)
+        s_gh = s.copy()
+        s_gh['drop_time'] = utc_dt.strftime("%H:%M:%S")
+        gh_msg = update_gh_secrets(system, s_gh)
         
-        # 3. Handle Scheduling (Trigger 5 mins before UTC drop)
         trigger_dt = utc_dt - timedelta(minutes=5)
         job_id = f"trigger_{system}"
         if scheduler.get_job(job_id): scheduler.remove_job(job_id)
-        scheduler.add_job(trigger_dispatch, 'date', run_date=trigger_dt, args=[system, s['workflow_file']], id=job_id)
+        scheduler.add_job(trigger_dispatch, 'date', run_date=trigger_dt, args=[system, s['workflow_file']], id=job_id, misfire_grace_time=3600)
         
         return jsonify({"status": f"{gh_msg} | Scheduled: {utc_dt.strftime('%H:%M:%S')} UTC"})
     except Exception as e:
-        return jsonify({"status": f"Error: {str(e)}"}), 400
+        return jsonify({"status": f"Save OK. Sched Error: {str(e)}"}), 400
 
 @app.route('/clear', methods=['POST'])
 def clear_schedule():
@@ -142,14 +142,14 @@ def clear_schedule():
     job_id = f"trigger_{system}"
     if scheduler.get_job(job_id):
         scheduler.remove_job(job_id)
-        return jsonify({"status": f"Schedule for {system} Cleared."})
-    return jsonify({"status": "No active schedule found."})
+        return jsonify({"status": f"{system} Schedule Cleared."})
+    return jsonify({"status": "No active schedule."})
 
 @app.route('/run_now', methods=['POST'])
 def run_now():
     data = request.json
-    msg = trigger_dispatch(data['system'], data['workflow_file'])
-    return jsonify({"status": msg})
+    trigger_dispatch(data['system'], data['workflow_file'])
+    return jsonify({"status": "Manual Dispatch Sent."})
 
 @app.route('/status')
 def status():
@@ -157,7 +157,6 @@ def status():
     res = {"SPL": "IDLE", "KCLS": "IDLE"}
     for j in jobs:
         sys_key = "SPL" if "SPL" in j.id else "KCLS"
-        # Display next run in UTC
         res[sys_key] = f"SIG @ {j.next_run_time.strftime('%H:%M:%S')} UTC"
     return jsonify(res)
 
