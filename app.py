@@ -1,26 +1,53 @@
-import os, base64, requests, json
+import os, base64, requests, sqlite3
 from flask import Flask, render_template, request, jsonify
 from nacl import encoding, public
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
+DB_PATH = "/app/data/sniper.db"
+
 scheduler = BackgroundScheduler()
 scheduler.start()
 
-# Load credentials from Environment Variables
-GH_CONFIG = {
-    'SPL': {
-        'token': os.getenv('SPL_GH_TOKEN', ''),
-        'owner': os.getenv('SPL_GH_OWNER', ''),
-        'repo': os.getenv('SPL_GH_REPO', '')
-    },
-    'KCLS': {
-        'token': os.getenv('KCLS_GH_TOKEN', ''),
-        'owner': os.getenv('KCLS_GH_OWNER', ''),
-        'repo': os.getenv('KCLS_GH_REPO', '')
-    }
+# Infrastructure Credentials (from Docker Env)
+GH_AUTH = {
+    'SPL': {'token': os.getenv('SPL_GH_TOKEN', ''), 'owner': os.getenv('SPL_GH_OWNER', ''), 'repo': os.getenv('SPL_GH_REPO', '')},
+    'KCLS': {'token': os.getenv('KCLS_GH_TOKEN', ''), 'owner': os.getenv('KCLS_GH_OWNER', ''), 'repo': os.getenv('KCLS_GH_REPO', '')}
 }
+
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = get_db_connection()
+    # Comprehensive Schema for all GHA Secrets
+    conn.execute('''CREATE TABLE IF NOT EXISTS configs (
+                        system TEXT PRIMARY KEY,
+                        base_url TEXT,
+                        lib_user TEXT,
+                        lib_pass TEXT,
+                        patron_email TEXT,
+                        ntfy_topic TEXT,
+                        drop_time TEXT,
+                        app_mode TEXT,
+                        priority_museums TEXT,
+                        auto_book_days TEXT,
+                        museum_config TEXT,
+                        museum_ids TEXT,
+                        strike_minutes TEXT,
+                        offset_ms TEXT
+                    )''')
+    # Default seeds with safe placeholders
+    for sys in ['SPL', 'KCLS']:
+        conn.execute('''INSERT OR IGNORE INTO configs VALUES 
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
+            (sys, "https://", "user", "pass", "email@io.com", "topic", "18:00:00", "alert", "slug1", "Saturday,Sunday", "slug:Name", "slug:ID", "1.0", "-150"))
+    conn.commit()
+    conn.close()
 
 def encrypt_secret(public_key: str, secret_value: str) -> str:
     public_key_obj = public.PublicKey(public_key.encode("utf-8"), encoding.Base64Encoder)
@@ -28,77 +55,88 @@ def encrypt_secret(public_key: str, secret_value: str) -> str:
     encrypted = sealed_box.encrypt(secret_value.encode("utf-8"))
     return base64.b64encode(encrypted).decode("utf-8")
 
-def gh_api_call(method, path, token, owner, repo, data=None):
-    url = f"https://api.github.com/repos/{owner}/{repo}/{path}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
-    }
-    if method == "GET": return requests.get(url, headers=headers).json()
-    if method == "PUT": return requests.put(url, headers=headers, json=data)
-    if method == "POST": return requests.post(url, headers=headers, json=data)
-
 def update_gh_secrets(system, secrets_dict):
-    cfg = GH_CONFIG[system]
-    pk_data = gh_api_call("GET", "actions/secrets/public-key", cfg['token'], cfg['owner'], cfg['repo'])
+    auth = GH_AUTH[system]
+    headers = {"Authorization": f"Bearer {auth['token']}", "Accept": "application/vnd.github+json"}
+    url_base = f"https://api.github.com/repos/{auth['owner']}/{auth['repo']}/actions/secrets"
     
+    # Get Public Key
+    pk_data = requests.get(f"{url_base}/public-key", headers=headers).json()
+    
+    # Upload each secret from the DB
     for key, value in secrets_dict.items():
-        if not value: continue
-        encrypted = encrypt_secret(pk_data['key'], value)
-        gh_api_call("PUT", f"actions/secrets/{key}", cfg['token'], cfg['owner'], cfg['repo'], 
-                    {"encrypted_value": encrypted, "key_id": pk_data['key_id']})
+        if not value or key == 'system': continue
+        # Convert DB keys to GitHub naming convention (upper case)
+        gh_key = key.upper()
+        encrypted = encrypt_secret(pk_data['key'], str(value))
+        requests.put(f"{url_base}/{gh_key}", headers=headers, json={
+            "encrypted_value": encrypted, "key_id": pk_data['key_id']
+        })
 
 def trigger_dispatch(system):
-    cfg = GH_CONFIG[system]
-    print(f"[{datetime.now()}] Triggering workflow for {system} ({cfg['repo']})...")
-    gh_api_call("POST", "actions/workflows/actions.yml/dispatches", 
-                cfg['token'], cfg['owner'], cfg['repo'], {"ref": "main"})
+    auth = GH_AUTH[system]
+    url = f"https://api.github.com/repos/{auth['owner']}/{auth['repo']}/actions/workflows/actions.yml/dispatches"
+    headers = {"Authorization": f"Bearer {auth['token']}", "Accept": "application/vnd.github+json"}
+    requests.post(url, headers=headers, json={"ref": "main"})
 
 @app.route('/')
 def index():
-    # Pass the config to the UI so fields are pre-filled (but token is hidden)
-    return render_template('index.html', config=GH_CONFIG)
+    conn = get_db_connection()
+    rows = conn.execute('SELECT * FROM configs').fetchall()
+    saved_data = {row['system']: dict(row) for row in rows}
+    conn.close()
+    return render_template('index.html', auth=GH_AUTH, saved=saved_data)
 
 @app.route('/save', methods=['POST'])
 def save():
     data = request.json
     system = data['system']
+    s = data['SECRETS']
     
-    # 1. Update Secrets
-    update_gh_secrets(system, data['SECRETS'])
-    
-    # 2. Handle Scheduling
-    drop_time_str = data['SECRETS'].get('DROP_TIME')
-    if drop_time_str:
-        # Expected format HH:MM:SS (UTC)
-        try:
-            drop_dt = datetime.strptime(drop_time_str, "%H:%M:%S")
-            now = datetime.now()
-            target_dt = now.replace(hour=drop_dt.hour, minute=drop_dt.minute, second=drop_dt.second, microsecond=0)
-            
-            # If target time already passed today, assume it's for tomorrow
-            if target_dt < now:
-                target_dt += timedelta(days=1)
+    # 1. Update SQLite
+    conn = get_db_connection()
+    conn.execute('''UPDATE configs SET 
+        base_url=?, lib_user=?, lib_pass=?, patron_email=?, ntfy_topic=?, 
+        drop_time=?, app_mode=?, priority_museums=?, auto_book_days=?, 
+        museum_config=?, museum_ids=?, strike_minutes=?, offset_ms=? 
+        WHERE system=?''', 
+        (s['base_url'], s['lib_user'], s['lib_pass'], s['patron_email'], s['ntfy_topic'],
+         s['drop_time'], s['app_mode'], s['priority_museums'], s['auto_book_days'],
+         s['museum_config'], s['museum_ids'], s['strike_minutes'], s['offset_ms'], system))
+    conn.commit()
+    conn.close()
 
-            # Trigger 5 minutes before the drop
-            trigger_dt = target_dt - timedelta(minutes=5)
-            
-            job_id = f"trigger_{system}"
-            if scheduler.get_job(job_id): scheduler.remove_job(job_id)
-            scheduler.add_job(trigger_dispatch, 'date', run_date=trigger_dt, args=[system], id=job_id)
-            
-            return jsonify({"status": f"SUCCESS: Secrets updated. {system} runner scheduled for {trigger_dt.strftime('%H:%M:%S')} UTC"})
-        except Exception as e:
-            return jsonify({"status": f"ERROR: Invalid time format: {str(e)}"}), 400
+    # 2. Sync to GitHub
+    update_gh_secrets(system, s)
     
-    return jsonify({"status": "SUCCESS: Secrets updated (No trigger scheduled)"})
+    # 3. Handle Scheduling
+    try:
+        drop_dt = datetime.strptime(s['drop_time'], "%H:%M:%S")
+        target_dt = datetime.now().replace(hour=drop_dt.hour, minute=drop_dt.minute, second=drop_dt.second, microsecond=0)
+        if target_dt < datetime.now(): target_dt += timedelta(days=1)
+        trigger_dt = target_dt - timedelta(minutes=5)
+        
+        job_id = f"trigger_{system}"
+        if scheduler.get_job(job_id): scheduler.remove_job(job_id)
+        scheduler.add_job(trigger_dispatch, 'date', run_date=trigger_dt, args=[system], id=job_id)
+        return jsonify({"status": f"SYNCED: Secrets updated & Scheduled for {trigger_dt.strftime('%H:%M:%S')} UTC"})
+    except:
+        return jsonify({"status": "SAVED: Secrets updated. Time format error, no schedule set."})
 
 @app.route('/run_now', methods=['POST'])
 def run_now():
-    system = request.json['system']
-    trigger_dispatch(system)
-    return jsonify({"status": f"SUCCESS: {system} Workflow triggered manually."})
+    trigger_dispatch(request.json['system'])
+    return jsonify({"status": "DISPATCHED: Remote runner started."})
+
+@app.route('/status')
+def status():
+    jobs = scheduler.get_jobs()
+    res = {"SPL": "Idle", "KCLS": "Idle"}
+    for j in jobs:
+        sys = "SPL" if "SPL" in j.id else "KCLS"
+        res[sys] = f"Strike Signal at {j.next_run_time.strftime('%H:%M:%S')}"
+    return jsonify(res)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    init_db()
+    app.run(host='0.0.0.0', port=5000)
