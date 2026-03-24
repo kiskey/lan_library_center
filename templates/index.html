@@ -1,55 +1,114 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sniper HQ</title>
+    <title>Sniper HQ v3.0</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background: #0f0f0f; color: #cfcfcf; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .card { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        .form-control { background: #252525; border: 1px solid #444; color: #fff; }
-        .form-control:focus { background: #2a2a2a; color: #fff; border-color: #0d6efd; }
-        .btn-schedule { background: #0056b3; border: none; font-weight: bold; }
-        .btn-run { font-weight: bold; }
-        label { color: #888; font-weight: bold; font-size: 0.8rem; text-transform: uppercase; }
-        .system-badge { font-size: 1.2rem; font-weight: 800; color: #0d6efd; }
+        body { background: #050505; color: #eee; font-family: 'Segoe UI', sans-serif; }
+        .card { background: #111; border: 1px solid #333; margin-bottom: 2rem; }
+        .form-label { font-size: 0.7rem; color: #888; font-weight: bold; text-transform: uppercase; margin-bottom: 2px; }
+        .form-control { background: #1a1a1a; border: 1px solid #333; color: #fff; font-size: 0.9rem; }
+        .form-control:focus { background: #222; border-color: #0d6efd; color: #fff; box-shadow: none; }
+        .status-pill { background: #000; border: 1px solid #00ff41; color: #00ff41; padding: 5px 10px; font-family: monospace; font-size: 0.8rem; }
+        .section-title { color: #0d6efd; font-size: 0.8rem; border-bottom: 1px solid #222; margin: 15px 0 10px 0; padding-bottom: 5px; }
     </style>
 </head>
-<body class="p-4">
+<body class="py-4">
     <div class="container">
-        <h1 class="mb-5 text-center">🎯 Sniper Control HQ</h1>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 fw-bold">🎯 Sniper Control HQ</h1>
+            <div class="d-flex gap-3">
+                <div id="SPL_hud" class="status-pill">SPL: Loading...</div>
+                <div id="KCLS_hud" class="status-pill">KCLS: Loading...</div>
+            </div>
+        </div>
+
         <div class="row g-4">
             {% for sys in ['SPL', 'KCLS'] %}
-            <div class="col-md-6">
+            <div class="col-lg-6">
                 <div class="card p-4">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <span class="system-badge">{{ sys }}</span>
-                        <span class="badge bg-dark border border-secondary text-secondary">{{ config[sys]['owner'] }}/{{ config[sys]['repo'] }}</span>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label>Drop Time (UTC HH:MM:SS)</label>
-                        <input type="text" id="{{sys}}_DROP_TIME" class="form-control form-control-lg text-warning" placeholder="18:00:00">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label>Museum Config</label>
-                        <textarea id="{{sys}}_MUSEUM_CONFIG" class="form-control" rows="3" placeholder="slug:Name,slug:Name"></textarea>
+                    <h4 class="text-primary fw-bold mb-1">{{ sys }} Strike Force</h4>
+                    <p class="text-secondary small mb-3">{{ auth[sys]['owner'] }}/{{ auth[sys]['repo'] }}</p>
+
+                    <!-- MISSION CRITICAL -->
+                    <div class="section-title">Mission Critical</div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Drop Time (UTC)</label>
+                            <input type="text" id="{{sys}}_drop_time" class="form-control text-warning" value="{{ saved[sys]['drop_time'] }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">App Mode</label>
+                            <select id="{{sys}}_app_mode" class="form-control">
+                                <option value="booking" {% if saved[sys]['app_mode'] == 'booking' %}selected{% endif %}>Booking</option>
+                                <option value="alert" {% if saved[sys]['app_mode'] == 'alert' %}selected{% endif %}>Alert Only</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <div class="row g-2 mb-4">
-                        <div class="col-6">
-                            <label>Strike Mins</label>
-                            <input type="text" id="{{sys}}_STRIKE_MINUTES" class="form-control" value="1.0">
+                    <div class="mt-3">
+                        <label class="form-label">Museum Config (slug:Name or ID:Name)</label>
+                        <textarea id="{{sys}}_museum_config" class="form-control" rows="2">{{ saved[sys]['museum_config'] }}</textarea>
+                    </div>
+
+                    {% if sys == 'SPL' %}
+                    <div class="mt-3">
+                        <label class="form-label">Museum IDs (slug:TechID)</label>
+                        <textarea id="{{sys}}_museum_ids" class="form-control" rows="2">{{ saved[sys]['museum_ids'] }}</textarea>
+                    </div>
+                    {% endif %}
+
+                    <!-- CREDENTIALS -->
+                    <div class="section-title">Credentials & Notification</div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Lib User</label>
+                            <input type="text" id="{{sys}}_lib_user" class="form-control" value="{{ saved[sys]['lib_user'] }}">
                         </div>
-                        <div class="col-6">
-                            <label>Offset MS</label>
-                            <input type="text" id="{{sys}}_OFFSET_MS" class="form-control" value="-150">
+                        <div class="col-md-6">
+                            <label class="form-label">Lib Pass</label>
+                            <input type="password" id="{{sys}}_lib_pass" class="form-control" value="{{ saved[sys]['lib_pass'] }}">
                         </div>
+                    </div>
+                    {% if sys == 'SPL' %}
+                    <div class="mt-2">
+                        <label class="form-label">Patron Email</label>
+                        <input type="text" id="{{sys}}_patron_email" class="form-control" value="{{ saved[sys]['patron_email'] }}">
+                    </div>
+                    {% endif %}
+                    <div class="mt-2">
+                        <label class="form-label">Ntfy Topic</label>
+                        <input type="text" id="{{sys}}_ntfy_topic" class="form-control" value="{{ saved[sys]['ntfy_topic'] }}">
+                    </div>
+
+                    <!-- TUNING -->
+                    <div class="section-title">Strike Tuning</div>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label">Strike Mins</label>
+                            <input type="text" id="{{sys}}_strike_minutes" class="form-control" value="{{ saved[sys]['strike_minutes'] }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Offset MS</label>
+                            <input type="text" id="{{sys}}_offset_ms" class="form-control" value="{{ saved[sys]['offset_ms'] }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Base URL</label>
+                            <input type="text" id="{{sys}}_base_url" class="form-control" value="{{ saved[sys]['base_url'] }}">
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <label class="form-label">Priority Museums (CSV Slugs/IDs)</label>
+                        <input type="text" id="{{sys}}_priority_museums" class="form-control" value="{{ saved[sys]['priority_museums'] }}">
+                    </div>
+                    <div class="mt-2 mb-4">
+                        <label class="form-label">Auto-Book Days</label>
+                        <input type="text" id="{{sys}}_auto_book_days" class="form-control" value="{{ saved[sys]['auto_book_days'] }}">
                     </div>
 
                     <div class="d-grid gap-2">
-                        <button onclick="save('{{sys}}')" class="btn btn-schedule btn-lg">Update Secrets & Schedule Strike</button>
-                        <button onclick="runNow('{{sys}}')" class="btn btn-outline-danger btn-run">Force Run Now</button>
+                        <button onclick="save('{{sys}}')" class="btn btn-primary btn-lg">Sync All Secrets & Schedule</button>
+                        <button onclick="runNow('{{sys}}')" class="btn btn-outline-danger">Run Now</button>
                     </div>
                 </div>
             </div>
@@ -58,25 +117,28 @@
     </div>
 
     <script>
+        async function updateHud() {
+            const res = await fetch('/status');
+            const data = await res.json();
+            document.getElementById('SPL_hud').innerText = "SPL: " + data.SPL;
+            document.getElementById('KCLS_hud').innerText = "KCLS: " + data.KCLS;
+        }
         async function save(sys) {
-            const data = {
-                system: sys,
-                SECRETS: {
-                    DROP_TIME: document.getElementById(sys+'_DROP_TIME').value,
-                    MUSEUM_CONFIG: document.getElementById(sys+'_MUSEUM_CONFIG').value,
-                    STRIKE_MINUTES: document.getElementById(sys+'_STRIKE_MINUTES').value,
-                    OFFSET_MS: document.getElementById(sys+'_OFFSET_MS').value
-                }
-            };
-            const res = await fetch('/save', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)});
-            const out = await res.json();
-            alert(out.status);
+            const fields = ['base_url','lib_user','lib_pass','patron_email','ntfy_topic','drop_time','app_mode','priority_museums','auto_book_days','museum_config','museum_ids','strike_minutes','offset_ms'];
+            const secrets = {};
+            fields.forEach(f => { 
+                const el = document.getElementById(sys+'_'+f);
+                if(el) secrets[f] = el.value;
+            });
+            const res = await fetch('/save', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({system: sys, SECRETS: secrets})});
+            const out = await res.json(); alert(out.status);
+            updateHud();
         }
         async function runNow(sys) {
             const res = await fetch('/run_now', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({system: sys})});
-            const out = await res.json();
-            alert(out.status);
+            const out = await res.json(); alert(out.status);
         }
+        setInterval(updateHud, 5000); updateHud();
     </script>
 </body>
 </html>
