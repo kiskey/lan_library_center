@@ -7,8 +7,6 @@ from datetime import datetime, timedelta
 
 app = Flask(__name__)
 DB_PATH = "/app/data/sniper.db"
-
-# Scheduler with SQLite persistence
 jobstores = {'default': SQLAlchemyJobStore(url=f'sqlite:///{DB_PATH}')}
 scheduler = BackgroundScheduler(jobstores=jobstores)
 scheduler.start()
@@ -18,6 +16,7 @@ GH_AUTH = {
     'KCLS': {'token': os.getenv('KCLS_GH_TOKEN', ''), 'owner': os.getenv('KCLS_GH_OWNER', ''), 'repo': os.getenv('KCLS_GH_REPO', '')}
 }
 
+# Authoritative secret mapping
 SECRET_KEYS = [
     'BASE_URL', 'LIB_USER', 'LIB_PASS', 'PATRON_EMAIL', 'NTFY_TOPIC', 
     'DROP_TIME', 'APP_MODE', 'PRIORITY_MUSEUMS', 'AUTO_BOOK_DAYS', 
@@ -25,9 +24,7 @@ SECRET_KEYS = [
 ]
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    conn = sqlite3.connect(DB_PATH); conn.row_factory = sqlite3.Row; return conn
 
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -42,19 +39,17 @@ def init_db():
     conn.execute('''CREATE TABLE IF NOT EXISTS master_lists (
                         system TEXT PRIMARY KEY, raw_config TEXT, raw_slugs TEXT
                     )''')
+    # Robust seeding for first-time or deleted DB
     for sys_key in ['SPL', 'KCLS']:
-        conn.execute('INSERT OR IGNORE INTO configs (system, workflow_file, base_url) VALUES (?, ?, ?)', 
-                     (sys_key, "actions.yml", "https://"))
-        conn.execute('INSERT OR IGNORE INTO master_lists (system, raw_config, raw_slugs) VALUES (?, ?, ?)', 
-                     (sys_key, "", ""))
-    conn.commit()
-    conn.close()
+        conn.execute('INSERT OR IGNORE INTO configs (system, workflow_file, base_url, lib_user, lib_pass, ntfy_topic, drop_time, app_mode, strike_minutes, offset_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', 
+                     (sys_key, "actions.yml", "https://", "user", "pass", "topic", "18:00:00", "alert", "1.0", "-150"))
+        conn.execute('INSERT OR IGNORE INTO master_lists (system, raw_config, raw_slugs) VALUES (?, ?, ?)', (sys_key, "", ""))
+    conn.commit(); conn.close()
 
 def encrypt_secret(public_key: str, secret_value: str) -> str:
     public_key_obj = public.PublicKey(public_key.encode("utf-8"), encoding.Base64Encoder)
     sealed_box = public.SealedBox(public_key_obj)
-    encrypted = sealed_box.encrypt(secret_value.encode("utf-8"))
-    return base64.b64encode(encrypted).decode("utf-8")
+    return base64.b64encode(sealed_box.encrypt(secret_value.encode("utf-8"))).decode("utf-8")
 
 def update_gh_secrets(system, s):
     auth = GH_AUTH[system]
@@ -65,11 +60,11 @@ def update_gh_secrets(system, s):
         for key in SECRET_KEYS:
             val = s.get(key.lower(), "")
             if not val: continue 
-            encrypted = encrypt_secret(pk_r['key'], str(val))
-            requests.put(f"{url_base}/{key}", headers=headers, json={"encrypted_value": encrypted, "key_id": pk_r['key_id']}, timeout=10)
+            enc_val = encrypt_secret(pk_r['key'], str(val))
+            requests.put(f"{url_base}/{key}", headers=headers, json={"encrypted_value": enc_val, "key_id": pk_r['key_id']}, timeout=10)
         return "GH Sync: OK"
     except Exception as e:
-        return f"GH Error: {str(e)}"
+        return f"GH Sync Error: {str(e)}"
 
 def trigger_dispatch(system, workflow_file):
     auth = GH_AUTH[system]
@@ -80,19 +75,18 @@ def trigger_dispatch(system, workflow_file):
 @app.route('/')
 def index():
     conn = get_db_connection()
-    saved_data = {row['system']: dict(row) for row in conn.execute('SELECT * FROM configs').fetchall()}
-    master_data = {row['system']: dict(row) for row in conn.execute('SELECT * FROM master_lists').fetchall()}
+    saved = {row['system']: dict(row) for row in conn.execute('SELECT * FROM configs').fetchall()}
+    masters = {row['system']: dict(row) for row in conn.execute('SELECT * FROM master_lists').fetchall()}
     conn.close()
-    return render_template('index.html', auth=GH_AUTH, saved=saved_data, masters=master_data)
+    return render_template('index.html', auth=GH_AUTH, saved=saved, masters=masters)
 
 @app.route('/save_master', methods=['POST'])
 def save_master():
     data = request.json
     conn = get_db_connection()
-    conn.execute('UPDATE master_lists SET raw_config=?, raw_slugs=? WHERE system=?', 
-                 (data['raw_config'], data.get('raw_slugs', ''), data['system']))
+    conn.execute('UPDATE master_lists SET raw_config=?, raw_slugs=? WHERE system=?', (data['raw_config'], data.get('raw_slugs', ''), data['system']))
     conn.commit(); conn.close()
-    return jsonify({"status": "Master Mappings Persisted"})
+    return jsonify({"status": "Master Mappings Saved Locally"})
 
 @app.route('/save', methods=['POST'])
 def save():
@@ -108,9 +102,9 @@ def save():
     conn.commit(); conn.close()
     try:
         local_tz = pytz.timezone(tz_name)
-        drop_time_obj = datetime.strptime(s['drop_time'], "%H:%M:%S")
+        dt_obj = datetime.strptime(s['drop_time'], "%H:%M:%S")
         now_local = datetime.now(local_tz)
-        local_dt = local_tz.localize(datetime(now_local.year, now_local.month, now_local.day, drop_time_obj.hour, drop_time_obj.minute, drop_time_obj.second))
+        local_dt = local_tz.localize(datetime(now_local.year, now_local.month, now_local.day, dt_obj.hour, dt_obj.minute, dt_obj.second))
         if local_dt < datetime.now(local_tz): local_dt += timedelta(days=1)
         utc_dt = local_dt.astimezone(pytz.UTC)
         s_gh = s.copy(); s_gh['drop_time'] = utc_dt.strftime("%H:%M:%S")
@@ -121,14 +115,12 @@ def save():
         scheduler.add_job(trigger_dispatch, 'date', run_date=trigger_dt, args=[system, s['workflow_file']], id=job_id, misfire_grace_time=3600)
         return jsonify({"status": f"{gh_msg} | Scheduled: {utc_dt.strftime('%H:%M:%S')} UTC"})
     except Exception as e:
-        return jsonify({"status": f"Local Save OK. Time Error: {str(e)}"}), 400
+        return jsonify({"status": f"Local Saved. Sched Error: {str(e)}"}), 400
 
 @app.route('/clear', methods=['POST'])
 def clear_schedule():
     job_id = f"trigger_{request.json['system']}"
-    if scheduler.get_job(job_id):
-        scheduler.remove_job(job_id)
-        return jsonify({"status": "Schedule Wiped."})
+    if scheduler.get_job(job_id): scheduler.remove_job(job_id); return jsonify({"status": "Schedule Cleared."})
     return jsonify({"status": "No active schedule."})
 
 @app.route('/run_now', methods=['POST'])
@@ -138,9 +130,8 @@ def run_now():
 
 @app.route('/status')
 def status():
-    jobs = scheduler.get_jobs()
     res = {"SPL": "IDLE", "KCLS": "IDLE"}
-    for j in jobs:
+    for j in scheduler.get_jobs():
         sys_key = "SPL" if "SPL" in j.id else "KCLS"
         res[sys_key] = f"SIG @ {j.next_run_time.strftime('%H:%M:%S')} UTC"
     return jsonify(res)
