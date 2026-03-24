@@ -3,68 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sniper HQ v3.3</title>
+    <title>Sniper HQ v4.0</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        :root { --bg: #0a0a0c; --card: #141417; --primary: #0d6efd; --green: #00ff41; --text: #e0e0e6; }
-        body { background-color: var(--bg); color: var(--text); font-family: 'Segoe UI', Roboto, sans-serif; }
-        .card { background-color: var(--card); border: 1px solid #2d2d35; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
-        .form-label { font-size: 0.65rem; color: #8a8a98; font-weight: 800; text-transform: uppercase; margin-bottom: 3px; letter-spacing: 0.5px; }
-        .form-control, .form-select { background-color: #1c1c21; border: 1px solid #363641; color: #fff; font-size: 0.85rem; }
-        .form-control:focus { background-color: #222229; border-color: var(--primary); color: #fff; box-shadow: none; }
-        .log-terminal { background: #000; border: 1px solid #222; color: var(--green); font-family: 'Courier New', monospace; font-size: 0.7rem; height: 100px; overflow-y: auto; padding: 10px; border-radius: 6px; margin-top: 15px; line-height: 1.2; }
-        .status-badge { background: #000; border: 1px solid var(--primary); color: var(--primary); padding: 4px 12px; font-family: monospace; font-size: 0.75rem; border-radius: 4px; }
-        .section-header { color: var(--primary); font-size: 0.7rem; font-weight: 900; border-bottom: 1px solid #2d2d35; margin: 15px 0 10px 0; padding-bottom: 4px; text-transform: uppercase; }
-        .btn-sync { font-weight: 700; text-transform: uppercase; font-size: 0.8rem; }
-        textarea { resize: none; }
+        :root { --bg: #f0f2f5; --card-bg: #ffffff; --primary: #1a73e8; --danger: #d93025; --text-main: #202124; --text-sec: #5f6368; --terminal-bg: #202124; }
+        body { background-color: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; }
+        .card { background-color: var(--card-bg); border: none; border-radius: 8px; box-shadow: 0 1px 3px rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.15); }
+        .form-label { font-size: 0.75rem; color: var(--text-sec); font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+        .form-control, .form-select { border: 1px solid #dadce0; border-radius: 4px; font-size: 0.9rem; padding: 8px; }
+        .form-control:focus { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+        .log-terminal { background: var(--terminal-bg); color: #00ff41; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.75rem; height: 120px; overflow-y: auto; padding: 12px; border-radius: 4px; margin-top: 20px; }
+        .status-badge { background: #e8f0fe; color: var(--primary); padding: 6px 12px; font-family: monospace; font-weight: bold; border-radius: 20px; font-size: 0.85rem; }
+        .section-header { color: var(--primary); font-size: 0.8rem; font-weight: 800; border-bottom: 2px solid #e8f0fe; margin: 20px 0 12px 0; padding-bottom: 4px; }
+        .btn-material { border-radius: 4px; font-weight: 600; text-transform: uppercase; font-size: 0.8rem; padding: 10px 16px; }
+        .btn-clear { color: var(--text-sec); border: 1px solid #dadce0; }
+        .btn-clear:hover { background: #f1f3f4; }
     </style>
 </head>
-<body class="py-4">
-    <div class="container-fluid px-lg-5">
-        <header class="d-flex justify-content-between align-items-center mb-4">
+<body class="py-5">
+    <div class="container">
+        <header class="d-flex justify-content-between align-items-end mb-5">
             <div>
-                <h1 class="h4 fw-bold m-0 text-white">🎯 SNIPER COMMAND CENTER</h1>
-                <small class="text-secondary">Distributed GHA Strike Network v3.3</small>
+                <h1 class="h3 fw-bold m-0 text-dark">🎯 SNIPER COMMAND CENTER</h1>
+                <p class="text-secondary m-0">v4.0 Global Timezone Orchestrator</p>
             </div>
             <div class="d-flex gap-3">
-                <div id="SPL_hud" class="status-badge">SPL: IDLE</div>
-                <div id="KCLS_hud" class="status-badge">KCLS: IDLE</div>
+                <div id="SPL_hud" class="status-badge shadow-sm">SPL: IDLE</div>
+                <div id="KCLS_hud" class="status-badge shadow-sm">KCLS: IDLE</div>
             </div>
         </header>
 
         <div class="row g-4">
             {% for sys in ['SPL', 'KCLS'] %}
             <div class="col-xl-6">
-                <div class="card p-4 h-100">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h2 class="h5 fw-bold m-0 text-white">{{ sys }} MISSION</h2>
-                        <div style="width: 200px;">
-                            <label class="form-label">Workflow YAML</label>
-                            <input type="text" id="{{sys}}_workflow_file" class="form-control form-control-sm" value="{{ saved[sys]['workflow_file'] }}">
+                <div class="card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2 class="h5 fw-bold m-0" style="color: #174ea6;">{{ sys }} MISSION</h2>
+                        <div class="input-group input-group-sm" style="width: 220px;">
+                            <span class="input-group-text bg-light border-end-0">YAML</span>
+                            <input type="text" id="{{sys}}_workflow_file" class="form-control" value="{{ saved[sys]['workflow_file'] }}">
                         </div>
                     </div>
 
-                    <div class="section-header">Targeting & Environment</div>
-                    <div class="row g-2">
+                    <div class="section-header">Timezone & Timing</div>
+                    <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label">Drop Time (UTC)</label>
-                            <input type="text" id="{{sys}}_drop_time" class="form-control text-warning fw-bold" value="{{ saved[sys]['drop_time'] }}" placeholder="HH:MM:SS">
+                            <label class="form-label">Drop Time</label>
+                            <input type="text" id="{{sys}}_drop_time" class="form-control fw-bold" value="{{ saved[sys]['drop_time'] }}" placeholder="HH:MM:SS">
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">App Mode</label>
-                            <select id="{{sys}}_app_mode" class="form-select">
-                                <option value="booking" {% if saved[sys]['app_mode'] == 'booking' %}selected{% endif %}>BOOKING</option>
-                                <option value="alert" {% if saved[sys]['app_mode'] == 'alert' %}selected{% endif %}>ALERT ONLY</option>
+                        <div class="col-md-5">
+                            <label class="form-label">Region Timezone</label>
+                            <select id="{{sys}}_timezone" class="form-select">
+                                <option value="America/Los_Angeles">Pacific (PST/PDT)</option>
+                                <option value="America/Denver">Mountain (MST/MDT)</option>
+                                <option value="America/Chicago">Central (CST/CDT)</option>
+                                <option value="America/New_York">Eastern (EST/EDT)</option>
+                                <option value="Asia/Kolkata">India (IST)</option>
+                                <option value="UTC">UTC / GMT</option>
                             </select>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Base URL</label>
-                            <input type="text" id="{{sys}}_base_url" class="form-control" value="{{ saved[sys]['base_url'] }}">
+                        <div class="col-md-3">
+                            <label class="form-label">Mode</label>
+                            <select id="{{sys}}_app_mode" class="form-select">
+                                <option value="booking" {% if saved[sys]['app_mode'] == 'booking' %}selected{% endif %}>BOOK</option>
+                                <option value="alert" {% if saved[sys]['app_mode'] == 'alert' %}selected{% endif %}>ALERT</option>
+                            </select>
                         </div>
                     </div>
 
                     <div class="mt-3">
-                        <label class="form-label">Museum Config (ID:Name)</label>
+                        <label class="form-label">Museum Config (Slug/ID:Name)</label>
                         <textarea id="{{sys}}_museum_config" class="form-control" rows="2">{{ saved[sys]['museum_config'] }}</textarea>
                     </div>
 
@@ -75,54 +83,35 @@
                     </div>
                     {% endif %}
 
-                    <div class="section-header">Auth & Telemetry</div>
+                    <div class section-header">Authentication & Targets</div>
                     <div class="row g-2">
-                        <div class="col-md-4">
-                            <label class="form-label">Lib User</label>
-                            <input type="text" id="{{sys}}_lib_user" class="form-control" value="{{ saved[sys]['lib_user'] }}">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Lib Pass</label>
-                            <input type="password" id="{{sys}}_lib_pass" class="form-control" value="{{ saved[sys]['lib_pass'] }}">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Ntfy Topic</label>
-                            <input type="text" id="{{sys}}_ntfy_topic" class="form-control" value="{{ saved[sys]['ntfy_topic'] }}">
-                        </div>
+                        <div class="col-4"><label class="form-label">Lib User</label><input type="text" id="{{sys}}_lib_user" class="form-control" value="{{ saved[sys]['lib_user'] }}"></div>
+                        <div class="col-4"><label class="form-label">Lib Pass</label><input type="password" id="{{sys}}_lib_pass" class="form-control" value="{{ saved[sys]['lib_pass'] }}"></div>
+                        <div class="col-4"><label class="form-label">Ntfy Topic</label><input type="text" id="{{sys}}_ntfy_topic" class="form-control" value="{{ saved[sys]['ntfy_topic'] }}"></div>
                     </div>
-                    {% if sys == 'SPL' %}
-                    <div class="mt-2">
-                        <label class="form-label">Patron Email</label>
-                        <input type="text" id="{{sys}}_patron_email" class="form-control" value="{{ saved[sys]['patron_email'] }}">
-                    </div>
-                    {% endif %}
 
-                    <div class="section-header">Strike Tuning</div>
-                    <div class="row g-2">
-                        <div class="col-md-6">
-                            <label class="form-label">Priority Slugs/IDs (CSV)</label>
-                            <input type="text" id="{{sys}}_priority_museums" class="form-control" value="{{ saved[sys]['priority_museums'] }}">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Auto-Book Days</label>
-                            <input type="text" id="{{sys}}_auto_book_days" class="form-control" value="{{ saved[sys]['auto_book_days'] }}">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Strike Duration (Minutes)</label>
-                            <input type="text" id="{{sys}}_strike_minutes" class="form-control" value="{{ saved[sys]['strike_minutes'] }}">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Network Offset (MS)</label>
-                            <input type="text" id="{{sys}}_offset_ms" class="form-control" value="{{ saved[sys]['offset_ms'] }}">
-                        </div>
+                    <div class="row g-2 mt-3">
+                        <div class="col-md-6"><label class="form-label">Auto-Book Days</label><input type="text" id="{{sys}}_auto_book_days" class="form-control" value="{{ saved[sys]['auto_book_days'] }}"></div>
+                        <div class="col-md-3"><label class="form-label">Mins</label><input type="text" id="{{sys}}_strike_minutes" class="form-control" value="{{ saved[sys]['strike_minutes'] }}"></div>
+                        <div class="col-md-3"><label class="form-label">Offset</label><input type="text" id="{{sys}}_offset_ms" class="form-control" value="{{ saved[sys]['offset_ms'] }}"></div>
                     </div>
+                    
+                    <input type="hidden" id="{{sys}}_base_url" value="{{ saved[sys]['base_url'] }}">
+                    {% if sys == 'SPL' %}
+                    <input type="hidden" id="{{sys}}_patron_email" value="{{ saved[sys]['patron_email'] }}">
+                    {% else %}
+                    <input type="hidden" id="{{sys}}_museum_ids" value="">
+                    <input type="hidden" id="{{sys}}_patron_email" value="">
+                    {% endif %}
+                    <input type="hidden" id="{{sys}}_priority_museums" value="{{ saved[sys]['priority_museums'] }}">
 
                     <div class="d-flex gap-2 mt-4">
-                        <button onclick="save('{{sys}}')" class="btn btn-primary btn-sync flex-grow-1">Sync & Schedule</button>
-                        <button onclick="runNow('{{sys}}')" class="btn btn-outline-danger btn-sync">Manual Fire</button>
+                        <button onclick="save('{{sys}}')" class="btn btn-primary btn-material flex-grow-1">Sync & Schedule</button>
+                        <button onclick="clearSchedule('{{sys}}')" class="btn btn-clear btn-material">Clear</button>
+                        <button onclick="runNow('{{sys}}')" class="btn btn-danger btn-material">Run Now</button>
                     </div>
 
-                    <div id="{{sys}}_log" class="log-terminal">TERMINAL READY > STANDBY</div>
+                    <div id="{{sys}}_log" class="log-terminal shadow-inner text-uppercase">TERMINAL STANDBY...</div>
                 </div>
             </div>
             {% endfor %}
@@ -153,36 +142,45 @@
                 if(el) secrets[f] = el.value;
             });
 
-            tlog(sys, "Initing Database update & GitHub Sync...");
+            const tz = document.getElementById(sys+'_timezone').value;
+            tlog(sys, "Syncing to Cloud (" + tz + ")...");
             
             try {
                 const res = await fetch('/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({system: sys, SECRETS: secrets})
+                    body: JSON.stringify({system: sys, SECRETS: secrets, timezone: tz})
                 });
                 const out = await res.json();
                 tlog(sys, out.status);
                 updateHud();
             } catch (e) {
-                tlog(sys, "CRITICAL BROWSER ERROR: " + e.message);
+                tlog(sys, "ERROR: " + e.message);
             }
+        }
+
+        async function clearSchedule(sys) {
+            tlog(sys, "Requesting schedule wipe...");
+            const res = await fetch('/clear', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({system: sys})
+            });
+            const out = await res.json();
+            tlog(sys, out.status);
+            updateHud();
         }
 
         async function runNow(sys) {
             const workflow = document.getElementById(sys+'_workflow_file').value;
-            tlog(sys, "Sending manual dispatch signal...");
+            tlog(sys, "Manual Dispatch Sent.");
             try {
-                const res = await fetch('/run_now', {
+                await fetch('/run_now', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({system: sys, workflow_file: workflow})
                 });
-                const out = await res.json();
-                tlog(sys, out.status);
-            } catch (e) {
-                tlog(sys, "DISPATCH ERROR: " + e.message);
-            }
+            } catch (e) {}
         }
 
         setInterval(updateHud, 5000);
