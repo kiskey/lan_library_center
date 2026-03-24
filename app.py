@@ -7,7 +7,8 @@ from datetime import datetime, timedelta
 
 app = Flask(__name__)
 DB_PATH = "/app/data/sniper.db"
-# Requirements: flask, requests, pynacl, apscheduler, sqlalchemy, pytz
+
+# Scheduler with SQLite persistence
 jobstores = {'default': SQLAlchemyJobStore(url=f'sqlite:///{DB_PATH}')}
 scheduler = BackgroundScheduler(jobstores=jobstores)
 scheduler.start()
@@ -24,7 +25,9 @@ SECRET_KEYS = [
 ]
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH); conn.row_factory = sqlite3.Row; return conn
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -40,9 +43,12 @@ def init_db():
                         system TEXT PRIMARY KEY, raw_config TEXT, raw_slugs TEXT
                     )''')
     for sys_key in ['SPL', 'KCLS']:
-        conn.execute('INSERT OR IGNORE INTO configs (system, workflow_file) VALUES (?, ?)', (sys_key, "actions.yml"))
-        conn.execute('INSERT OR IGNORE INTO master_lists (system, raw_config, raw_slugs) VALUES (?, ?, ?)', (sys_key, "", ""))
-    conn.commit(); conn.close()
+        conn.execute('INSERT OR IGNORE INTO configs (system, workflow_file, base_url) VALUES (?, ?, ?)', 
+                     (sys_key, "actions.yml", "https://"))
+        conn.execute('INSERT OR IGNORE INTO master_lists (system, raw_config, raw_slugs) VALUES (?, ?, ?)', 
+                     (sys_key, "", ""))
+    conn.commit()
+    conn.close()
 
 def encrypt_secret(public_key: str, secret_value: str) -> str:
     public_key_obj = public.PublicKey(public_key.encode("utf-8"), encoding.Base64Encoder)
@@ -61,9 +67,9 @@ def update_gh_secrets(system, s):
             if not val: continue 
             encrypted = encrypt_secret(pk_r['key'], str(val))
             requests.put(f"{url_base}/{key}", headers=headers, json={"encrypted_value": encrypted, "key_id": pk_r['key_id']}, timeout=10)
-        return "GitHub Cloud: ARMED"
+        return "GH Sync: OK"
     except Exception as e:
-        return f"GH Sync Failed: {str(e)}"
+        return f"GH Error: {str(e)}"
 
 def trigger_dispatch(system, workflow_file):
     auth = GH_AUTH[system]
@@ -83,7 +89,8 @@ def index():
 def save_master():
     data = request.json
     conn = get_db_connection()
-    conn.execute('UPDATE master_lists SET raw_config=?, raw_slugs=? WHERE system=?', (data['raw_config'], data.get('raw_slugs', ''), data['system']))
+    conn.execute('UPDATE master_lists SET raw_config=?, raw_slugs=? WHERE system=?', 
+                 (data['raw_config'], data.get('raw_slugs', ''), data['system']))
     conn.commit(); conn.close()
     return jsonify({"status": "Master Mappings Persisted"})
 
