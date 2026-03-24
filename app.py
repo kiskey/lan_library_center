@@ -1,4 +1,4 @@
-import os, base64, requests, sqlite3, sys
+import os, base64, requests, sqlite3, sys, pytz
 from flask import Flask, render_template, request, jsonify
 from nacl import encoding, public
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -51,7 +51,6 @@ def update_gh_secrets(system, s):
     auth = GH_AUTH[system]
     headers = {"Authorization": f"Bearer {auth['token']}", "Accept": "application/vnd.github+json"}
     url_base = f"https://api.github.com/repos/{auth['owner']}/{auth['repo']}/actions/secrets"
-    
     try:
         pk_r = requests.get(f"{url_base}/public-key", headers=headers, timeout=10)
         pk_data = pk_r.json()
@@ -89,7 +88,9 @@ def save():
     data = request.json
     system = data['system']
     s = data['SECRETS']
+    tz_name = data.get('timezone', 'UTC')
     
+    # 1. Update SQLite (Saves the user's local time string)
     conn = get_db_connection()
     conn.execute('''UPDATE configs SET workflow_file=?, base_url=?, lib_user=?, lib_pass=?, 
         patron_email=?, ntfy_topic=?, drop_time=?, app_mode=?, priority_museums=?, 
@@ -101,36 +102,48 @@ def save():
     conn.commit()
     conn.close()
 
-    gh_msg = update_gh_secrets(system, s)
-    
-# 3. Handle Scheduling
+    # 2. Timezone Conversion Logic
     try:
-        t_str = s['drop_time'].strip()
-        # Specific check for hour overflow
-        hour_part = int(t_str.split(':')[0])
-        if hour_part > 23:
-            return jsonify({"status": f"{gh_msg} | FAIL: Hour '{hour_part}' is invalid. Use 00-23."})
-
-        drop_dt = datetime.strptime(t_str, "%H:%M:%S")
-        now = datetime.now()
-        target_dt = now.replace(hour=drop_dt.hour, minute=drop_dt.minute, second=drop_dt.second, microsecond=0)
+        local_tz = pytz.timezone(tz_name)
+        # Parse user input
+        drop_time_obj = datetime.strptime(s['drop_time'], "%H:%M:%S")
+        now_local = datetime.now(local_tz)
         
-        # If target time already passed today, assume it's for tomorrow
-        if target_dt < now:
-            target_dt += timedelta(days=1)
-
-        # Trigger 5 minutes before the drop
-        trigger_dt = target_dt - timedelta(minutes=5)
+        # Build full datetime in local time
+        local_dt = local_tz.localize(datetime(
+            now_local.year, now_local.month, now_local.day, 
+            drop_time_obj.hour, drop_time_obj.minute, drop_time_obj.second
+        ))
         
+        # Handle day rollover
+        if local_dt < datetime.now(local_tz):
+            local_dt += timedelta(days=1)
+            
+        # Convert to UTC for GitHub Secret & Scheduler
+        utc_dt = local_dt.astimezone(pytz.UTC)
+        s['drop_time'] = utc_dt.strftime("%H:%M:%S") # Override for GH update
+        
+        # Sync to GitHub
+        gh_msg = update_gh_secrets(system, s)
+        
+        # 3. Handle Scheduling (Trigger 5 mins before UTC drop)
+        trigger_dt = utc_dt - timedelta(minutes=5)
         job_id = f"trigger_{system}"
         if scheduler.get_job(job_id): scheduler.remove_job(job_id)
         scheduler.add_job(trigger_dispatch, 'date', run_date=trigger_dt, args=[system, s['workflow_file']], id=job_id)
         
-        return jsonify({"status": f"{gh_msg} | SIGNAL SET: {trigger_dt.strftime('%H:%M:%S')} UTC"})
-    except ValueError:
-        return jsonify({"status": f"{gh_msg} | FAIL: Use HH:MM:SS format (e.g. 18:00:00)"})
+        return jsonify({"status": f"{gh_msg} | Scheduled: {utc_dt.strftime('%H:%M:%S')} UTC"})
     except Exception as e:
-        return jsonify({"status": f"{gh_msg} | Sched Error: {str(e)}"})
+        return jsonify({"status": f"Error: {str(e)}"}), 400
+
+@app.route('/clear', methods=['POST'])
+def clear_schedule():
+    system = request.json['system']
+    job_id = f"trigger_{system}"
+    if scheduler.get_job(job_id):
+        scheduler.remove_job(job_id)
+        return jsonify({"status": f"Schedule for {system} Cleared."})
+    return jsonify({"status": "No active schedule found."})
 
 @app.route('/run_now', methods=['POST'])
 def run_now():
@@ -144,7 +157,8 @@ def status():
     res = {"SPL": "IDLE", "KCLS": "IDLE"}
     for j in jobs:
         sys_key = "SPL" if "SPL" in j.id else "KCLS"
-        res[sys_key] = f"SIG @ {j.next_run_time.strftime('%H:%M:%S')}"
+        # Display next run in UTC
+        res[sys_key] = f"SIG @ {j.next_run_time.strftime('%H:%M:%S')} UTC"
     return jsonify(res)
 
 if __name__ == '__main__':
