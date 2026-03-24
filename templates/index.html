@@ -1,126 +1,49 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Sniper HQ v3.2</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background: #050505; color: #ddd; font-family: 'Segoe UI', sans-serif; }
-        .card { background: #111; border: 1px solid #333; }
-        .form-label { font-size: 0.65rem; color: #777; font-weight: 800; text-transform: uppercase; margin: 0; }
-        .form-control { background: #1a1a1a; border: 1px solid #333; color: #fff; font-size: 0.85rem; padding: 4px 8px; }
-        .form-control:focus { background: #222; border-color: #0d6efd; color: #fff; box-shadow: none; }
-        .log-box { background: #000; color: #00ff41; font-family: monospace; font-size: 0.7rem; padding: 8px; height: 60px; overflow-y: auto; border: 1px solid #222; }
-        .section-tag { color: #0d6efd; font-size: 0.7rem; font-weight: bold; border-bottom: 1px solid #222; margin-top: 15px; margin-bottom: 10px; }
-    </style>
-</head>
-<body class="py-4">
-    <div class="container-fluid px-4">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1 class="h4 fw-bold m-0 text-white">🎯 SNIPER COMMAND CENTER</h1>
-            <div class="d-flex gap-3">
-                <div id="SPL_hud" class="badge bg-dark border border-primary p-2">SPL: Loading...</div>
-                <div id="KCLS_hud" class="badge bg-dark border border-primary p-2">KCLS: Loading...</div>
-            </div>
-        </div>
+async function save(sys) {
+        const fields = ['workflow_file','base_url','lib_user','lib_pass','patron_email','ntfy_topic','drop_time','app_mode','priority_museums','auto_book_days','museum_config','museum_ids','strike_minutes','offset_ms'];
+        const secrets = {};
+        fields.forEach(f => {
+            const el = document.getElementById(sys+'_'+f);
+            if(el) secrets[f] = el.value;
+        });
 
-        <div class="row g-4">
-            {% for sys in ['SPL', 'KCLS'] %}
-            <div class="col-lg-6">
-                <div class="card p-4">
-                    <div class="d-flex justify-content-between">
-                        <h5 class="text-primary fw-bold">{{ sys }} FORCE</h5>
-                        <input type="text" id="{{sys}}_workflow_file" class="form-control w-50" value="{{ saved[sys]['workflow_file'] }}" placeholder="workflow.yml">
-                    </div>
+        const logBox = document.getElementById(sys+'_log');
+        logBox.innerText = "Syncing with GitHub (this takes ~15s)...";
 
-                    <div class="section-tag">Targeting</div>
-                    <div class="row g-2">
-                        <div class="col-4">
-                            <label class="form-label">Drop (UTC)</label>
-                            <input type="text" id="{{sys}}_drop_time" class="form-control text-warning" value="{{ saved[sys]['drop_time'] }}">
-                        </div>
-                        <div class="col-4">
-                            <label class="form-label">Mode</label>
-                            <select id="{{sys}}_app_mode" class="form-control">
-                                <option value="booking" {% if saved[sys]['app_mode'] == 'booking' %}selected{% endif %}>Booking</option>
-                                <option value="alert" {% if saved[sys]['app_mode'] == 'alert' %}selected{% endif %}>Alert</option>
-                            </select>
-                        </div>
-                        <div class="col-4">
-                            <label class="form-label">Base URL</label>
-                            <input type="text" id="{{sys}}_base_url" class="form-control" value="{{ saved[sys]['base_url'] }}">
-                        </div>
-                    </div>
-
-                    <div class="mt-2">
-                        <label class="form-label">Museum Config (ID:Name)</label>
-                        <textarea id="{{sys}}_museum_config" class="form-control" rows="2">{{ saved[sys]['museum_config'] }}</textarea>
-                    </div>
-
-                    {% if sys == 'SPL' %}
-                    <div class="mt-2">
-                        <label class="form-label">Museum IDs (slug:TechID)</label>
-                        <textarea id="{{sys}}_museum_ids" class="form-control" rows="2">{{ saved[sys]['museum_ids'] }}</textarea>
-                    </div>
-                    {% endif %}
-
-                    <div class="section-tag">Account Credentials</div>
-                    <div class="row g-2">
-                        <div class="col-4"><label class="form-label">Lib User</label><input type="text" id="{{sys}}_lib_user" class="form-control" value="{{ saved[sys]['lib_user'] }}"></div>
-                        <div class="col-4"><label class="form-label">Lib Pass</label><input type="password" id="{{sys}}_lib_pass" class="form-control" value="{{ saved[sys]['lib_pass'] }}"></div>
-                        <div class="col-4"><label class="form-label">Ntfy Topic</label><input type="text" id="{{sys}}_ntfy_topic" class="form-control" value="{{ saved[sys]['ntfy_topic'] }}"></div>
-                    </div>
-                    {% if sys == 'SPL' %}
-                    <div class="mt-2"><label class="form-label">Patron Email</label><input type="text" id="{{sys}}_patron_email" class="form-control" value="{{ saved[sys]['patron_email'] }}"></div>
-                    {% endif %}
-
-                    <div class="section-tag">Mission Tuning</div>
-                    <div class="row g-2">
-                        <div class="col-6"><label class="form-label">Priority Slugs/IDs</label><input type="text" id="{{sys}}_priority_museums" class="form-control" value="{{ saved[sys]['priority_museums'] }}"></div>
-                        <div class="col-6"><label class="form-label">Auto-Book Days</label><input type="text" id="{{sys}}_auto_book_days" class="form-control" value="{{ saved[sys]['auto_book_days'] }}"></div>
-                    </div>
-                    <div class="row g-2 mt-2">
-                        <div class="col-6"><label class="form-label">Strike Mins</label><input type="text" id="{{sys}}_strike_minutes" class="form-control" value="{{ saved[sys]['strike_minutes'] }}"></div>
-                        <div class="col-6"><label class="form-label">Offset MS</label><input type="text" id="{{sys}}_offset_ms" class="form-control" value="{{ saved[sys]['offset_ms'] }}"></div>
-                    </div>
-
-                    <div class="d-flex gap-2 mt-4">
-                        <button onclick="save('{{sys}}')" class="btn btn-primary flex-grow-1">Update & Schedule</button>
-                        <button onclick="runNow('{{sys}}')" class="btn btn-outline-danger">Run Now</button>
-                    </div>
-                    <div id="{{sys}}_log" class="log-box mt-3">Ready.</div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-
-    <script>
-        async function updateHud() {
-            const res = await fetch('/status');
-            const data = await res.json();
-            document.getElementById('SPL_hud').innerText = "SPL: " + data.SPL;
-            document.getElementById('KCLS_hud').innerText = "KCLS: " + data.KCLS;
-        }
-        async function save(sys) {
-            const fields = ['workflow_file','base_url','lib_user','lib_pass','patron_email','ntfy_topic','drop_time','app_mode','priority_museums','auto_book_days','museum_config','museum_ids','strike_minutes','offset_ms'];
-            const secrets = {};
-            fields.forEach(f => {
-                const el = document.getElementById(sys+'_'+f);
-                if(el) secrets[f] = el.value;
+        try {
+            const res = await fetch('/save', {
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({system: sys, SECRETS: secrets})
             });
-            document.getElementById(sys+'_log').innerText = "Processing...";
-            const res = await fetch('/save', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({system: sys, SECRETS: secrets})});
+            
+            if (!res.ok) {
+                const errText = await res.text();
+                logBox.innerText = "SERVER ERROR: " + errText;
+                return;
+            }
+
             const out = await res.json();
-            document.getElementById(sys+'_log').innerText = out.status;
+            logBox.innerText = out.status;
             updateHud();
+        } catch (e) {
+            logBox.innerText = "BROWSER ERROR: " + e.message;
         }
-        async function runNow(sys) {
-            const workflow = document.getElementById(sys+'_workflow_file').value;
-            const res = await fetch('/run_now', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({system: sys, workflow_file: workflow})});
+    }
+
+    async function runNow(sys) {
+        const workflow = document.getElementById(sys+'_workflow_file').value;
+        const logBox = document.getElementById(sys+'_log');
+        logBox.innerText = "Triggering manual strike...";
+        
+        try {
+            const res = await fetch('/run_now', {
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({system: sys, workflow_file: workflow})
+            });
             const out = await res.json();
-            document.getElementById(sys+'_log').innerText = "Manual: " + out.status;
+            logBox.innerText = "Manual " + out.status;
+        } catch (e) {
+            logBox.innerText = "Manual Error: " + e.message;
         }
-        setInterval(updateHud, 5000); updateHud();
-    </script>
-</body>
-</html>
+    }
