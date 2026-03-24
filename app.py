@@ -10,19 +10,18 @@ DB_PATH = "/app/data/sniper.db"
 scheduler = BackgroundScheduler()
 scheduler.start()
 
-# Infrastructure Credentials
+# Credentials for the administrative bridge (Docker Env)
 GH_AUTH = {
-    'SPL': {
-        'token': os.getenv('SPL_GH_TOKEN', ''),
-        'owner': os.getenv('SPL_GH_OWNER', ''),
-        'repo': os.getenv('SPL_GH_REPO', '')
-    },
-    'KCLS': {
-        'token': os.getenv('KCLS_GH_TOKEN', ''),
-        'owner': os.getenv('KCLS_GH_OWNER', ''),
-        'repo': os.getenv('KCLS_GH_REPO', '')
-    }
+    'SPL': {'token': os.getenv('SPL_GH_TOKEN', ''), 'owner': os.getenv('SPL_GH_OWNER', ''), 'repo': os.getenv('SPL_GH_REPO', '')},
+    'KCLS': {'token': os.getenv('KCLS_GH_TOKEN', ''), 'owner': os.getenv('KCLS_GH_OWNER', ''), 'repo': os.getenv('KCLS_GH_REPO', '')}
 }
+
+# The authoritative list of all secrets required by the GHA runners
+SECRET_KEYS = [
+    'BASE_URL', 'LIB_USER', 'LIB_PASS', 'PATRON_EMAIL', 'NTFY_TOPIC', 
+    'DROP_TIME', 'APP_MODE', 'PRIORITY_MUSEUMS', 'AUTO_BOOK_DAYS', 
+    'MUSEUM_CONFIG', 'MUSEUM_IDS', 'STRIKE_MINUTES', 'OFFSET_MS'
+]
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -32,14 +31,15 @@ def get_db_connection():
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = get_db_connection()
-    # Added workflow_file column
+    # Ensure table exists with ALL columns including the workflow filename
     conn.execute('''CREATE TABLE IF NOT EXISTS configs (
                         system TEXT PRIMARY KEY,
+                        workflow_file TEXT,
                         base_url TEXT, lib_user TEXT, lib_pass TEXT, patron_email TEXT,
                         ntfy_topic TEXT, drop_time TEXT, app_mode TEXT,
                         priority_museums TEXT, auto_book_days TEXT,
                         museum_config TEXT, museum_ids TEXT, strike_minutes TEXT,
-                        offset_ms TEXT, workflow_file TEXT
+                        offset_ms TEXT
                     )''')
     for sys in ['SPL', 'KCLS']:
         conn.execute('INSERT OR IGNORE INTO configs (system, workflow_file) VALUES (?, ?)', (sys, "actions.yml"))
@@ -57,49 +57,26 @@ def update_gh_secrets(system, secrets_dict):
     headers = {"Authorization": f"Bearer {auth['token']}", "Accept": "application/vnd.github+json"}
     url_base = f"https://api.github.com/repos/{auth['owner']}/{auth['repo']}/actions/secrets"
     
-    # 1. Get Public Key
-    r = requests.get(f"{url_base}/public-key", headers=headers)
-    if r.status_code != 200:
-        return f"Error getting public key: {r.status_code} - {r.text}"
-    
-    pk_data = r.json()
-    
-    # 2. Sync loop
-    success_count = 0
-    for key, value in secrets_dict.items():
-        # Skip internal dashboard keys that aren't GitHub secrets
-        if key in ['system', 'workflow_file'] or not value: continue
-        
-        gh_key = key.upper()
-        encrypted = encrypt_secret(pk_data['key'], str(value))
-        resp = requests.put(f"{url_base}/{gh_key}", headers=headers, json={
-            "encrypted_value": encrypted, "key_id": pk_data['key_id']
-        })
-        if resp.status_code in [201, 204]: success_count += 1
-        else: return f"Error updating {gh_key}: {resp.status_code} - {resp.text}"
-        
-    return f"Successfully synced {success_count} secrets to GitHub."
+    try:
+        pk_data = requests.get(f"{url_base}/public-key", headers=headers).json()
+        for key in SECRET_KEYS:
+            val = secrets_dict.get(key.lower(), "")
+            if not val: continue 
+            
+            encrypted = encrypt_secret(pk_data['key'], str(val))
+            requests.put(f"{url_base}/{key}", headers=headers, json={
+                "encrypted_value": encrypted, "key_id": pk_data['key_id']
+            })
+        return "GitHub Secrets Synced."
+    except Exception as e:
+        return f"GH Error: {str(e)}"
 
-def trigger_dispatch(system, workflow_filename=None):
+def trigger_dispatch(system, workflow_file):
     auth = GH_AUTH[system]
-    
-    # If filename not provided, fetch from DB
-    if not workflow_filename:
-        conn = get_db_connection()
-        row = conn.execute('SELECT workflow_file FROM configs WHERE system=?', (system,)).fetchone()
-        workflow_filename = row['workflow_file'] if row else "actions.yml"
-        conn.close()
-
-    url = f"https://api.github.com/repos/{auth['owner']}/{auth['repo']}/actions/workflows/{workflow_filename}/dispatches"
+    url = f"https://api.github.com/repos/{auth['owner']}/{auth['repo']}/actions/workflows/{workflow_file}/dispatches"
     headers = {"Authorization": f"Bearer {auth['token']}", "Accept": "application/vnd.github+json"}
-    
-    resp = requests.post(url, headers=headers, json={"ref": "main"})
-    if resp.status_code == 204:
-        return "Remote Strike Initialized (204 OK)"
-    elif resp.status_code == 404:
-        return f"Error: Workflow '{workflow_filename}' not found (404)."
-    else:
-        return f"Trigger Failed: {resp.status_code} - {resp.text}"
+    r = requests.post(url, headers=headers, json={"ref": "main"})
+    return f"Triggered: {r.status_code}"
 
 @app.route('/')
 def index():
@@ -113,54 +90,51 @@ def index():
 def save():
     data = request.json
     system = data['system']
-    s = data['SECRETS']
+    s = data['SECRETS'] # Frontend sends everything in lowercase
     
-    # 1. Update SQLite
     conn = get_db_connection()
     conn.execute('''UPDATE configs SET 
-        base_url=?, lib_user=?, lib_pass=?, patron_email=?, ntfy_topic=?, 
-        drop_time=?, app_mode=?, priority_museums=?, auto_book_days=?, 
-        museum_config=?, museum_ids=?, strike_minutes=?, offset_ms=?, workflow_file=? 
-        WHERE system=?''', 
-        (s['base_url'], s['lib_user'], s['lib_pass'], s['patron_email'], s['ntfy_topic'],
-         s['drop_time'], s['app_mode'], s['priority_museums'], s['auto_book_days'],
-         s['museum_config'], s['museum_ids'], s['strike_minutes'], s['offset_ms'], 
-         s['workflow_file'], system))
+        workflow_file=?, base_url=?, lib_user=?, lib_pass=?, patron_email=?, 
+        ntfy_topic=?, drop_time=?, app_mode=?, priority_museums=?, 
+        auto_book_days=?, museum_config=?, museum_ids=?, strike_minutes=?, 
+        offset_ms=? WHERE system=?''', 
+        (s.get('workflow_file','actions.yml'), s.get('base_url',''), s.get('lib_user',''), 
+         s.get('lib_pass',''), s.get('patron_email',''), s.get('ntfy_topic',''), 
+         s.get('drop_time',''), s.get('app_mode',''), s.get('priority_museums',''), 
+         s.get('auto_book_days',''), s.get('museum_config',''), s.get('museum_ids',''), 
+         s.get('strike_minutes',''), s.get('offset_ms',''), system))
     conn.commit()
     conn.close()
 
-    # 2. Sync to GitHub & Get Forensic Report
-    gh_report = update_gh_secrets(system, s)
+    gh_msg = update_gh_secrets(system, s)
     
-    # 3. Handle Scheduling
+    # Schedule logic
     try:
         drop_dt = datetime.strptime(s['drop_time'], "%H:%M:%S")
-        now = datetime.now()
-        target_dt = now.replace(hour=drop_dt.hour, minute=drop_dt.minute, second=drop_dt.second, microsecond=0)
-        if target_dt < now: target_dt += timedelta(days=1)
+        target_dt = datetime.now().replace(hour=drop_dt.hour, minute=drop_dt.minute, second=drop_dt.second, microsecond=0)
+        if target_dt < datetime.now(): target_dt += timedelta(days=1)
         trigger_dt = target_dt - timedelta(minutes=5)
         
         job_id = f"trigger_{system}"
         if scheduler.get_job(job_id): scheduler.remove_job(job_id)
         scheduler.add_job(trigger_dispatch, 'date', run_date=trigger_dt, args=[system, s['workflow_file']], id=job_id)
-        
-        return jsonify({"status": f"{gh_report}\nStrike scheduled: {trigger_dt.strftime('%H:%M:%S')} UTC"})
+        return jsonify({"status": f"{gh_msg} Scheduled: {trigger_dt.strftime('%H:%M:%S')}"})
     except:
-        return jsonify({"status": f"{gh_report}\n(Scheduling failed: Check time format)"})
+        return jsonify({"status": f"{gh_msg} (No Schedule)"})
 
 @app.route('/run_now', methods=['POST'])
 def run_now():
-    system = request.json['system']
-    msg = trigger_dispatch(system)
+    data = request.json
+    msg = trigger_dispatch(data['system'], data['workflow_file'])
     return jsonify({"status": msg})
 
 @app.route('/status')
-def get_status():
+def status():
     jobs = scheduler.get_jobs()
-    res = {"SPL": "IDLE", "KCLS": "IDLE"}
+    res = {"SPL": "Idle", "KCLS": "Idle"}
     for j in jobs:
         sys = "SPL" if "SPL" in j.id else "KCLS"
-        res[sys] = f"READY: Signal at {j.next_run_time.strftime('%H:%M:%S')}"
+        res[sys] = f"Auto-Trigger: {j.next_run_time.strftime('%H:%M:%S')}"
     return jsonify(res)
 
 if __name__ == '__main__':
