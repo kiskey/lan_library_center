@@ -3,32 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sniper HQ v4.5</title>
+    <title>Sniper HQ v4.7</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        :root { --bg: #f4f7f9; --card-bg: #ffffff; --primary: #1a73e8; --accent: #f8f9fa; }
+        :root { --bg: #f0f2f5; --primary: #1a73e8; --danger: #d93025; --terminal: #202124; }
         body { background-color: var(--bg); color: #202124; font-family: 'Segoe UI', system-ui, sans-serif; }
-        .card { border: none; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); margin-bottom: 20px; }
-        .form-label { font-size: 0.7rem; color: #5f6368; font-weight: 700; text-transform: uppercase; }
-        .form-control, .form-select { border: 1px solid #dfe1e5; border-radius: 6px; font-size: 0.9rem; }
-        .log-terminal { background: #202124; color: #00ff41; font-family: monospace; font-size: 0.75rem; height: 100px; overflow-y: auto; padding: 10px; border-radius: 6px; }
-        .status-badge { background: #e8f0fe; color: var(--primary); padding: 5px 15px; font-weight: bold; border-radius: 20px; font-size: 0.8rem; }
-        .section-header { color: var(--primary); font-size: 0.8rem; font-weight: 800; border-bottom: 2px solid #e8f0fe; margin: 15px 0 10px 0; padding-bottom: 4px; }
-        .day-btn { font-size: 0.7rem; padding: 5px 8px; margin: 2px; border: 1px solid #dfe1e5; cursor: pointer; border-radius: 4px; background: white; }
+        .card { border: none; border-radius: 12px; box-shadow: 0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15); margin-bottom: 24px; }
+        .form-label { font-size: 0.65rem; color: #5f6368; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+        .form-control, .form-select { border: 1px solid #dadce0; border-radius: 6px; font-size: 0.85rem; padding: 6px 10px; }
+        .log-terminal { background: var(--terminal); color: #00ff41; font-family: 'Consolas', monospace; font-size: 0.7rem; height: 100px; overflow-y: auto; padding: 10px; border-radius: 6px; line-height: 1.3; }
+        .status-badge { background: #e8f0fe; color: var(--primary); padding: 6px 14px; font-weight: 700; border-radius: 30px; font-size: 0.8rem; border: 1px solid #c2e7ff; }
+        .section-header { color: var(--primary); font-size: 0.75rem; font-weight: 800; border-bottom: 2px solid #e8f0fe; margin: 18px 0 10px 0; padding-bottom: 3px; text-transform: uppercase; }
+        .day-btn { font-size: 0.65rem; padding: 5px 8px; margin: 1px; border: 1px solid #dadce0; cursor: pointer; border-radius: 4px; background: white; }
         .day-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
-        .museum-pill { font-size: 0.75rem; padding: 4px 10px; margin: 3px; border-radius: 15px; border: 1px solid #dadce0; display: inline-block; cursor: pointer; user-select: none; }
-        .museum-pill.selected { background: #e8f0fe; border-color: var(--primary); color: var(--primary); font-weight: bold; }
-        .museum-pill.priority { border: 2px solid #ea4335; }
-        .nav-tabs .nav-link { font-size: 0.8rem; font-weight: bold; color: #5f6368; }
+        .museum-pill { font-size: 0.7rem; padding: 5px 12px; margin: 3px; border-radius: 15px; border: 1px solid #dadce0; display: inline-block; cursor: pointer; user-select: none; background: white; transition: 0.2s; }
+        .museum-pill.selected { background: #e8f0fe; border-color: var(--primary); color: var(--primary); font-weight: 700; }
+        .museum-pill.priority { border: 2px solid var(--danger); background: #fce8e6; color: var(--danger); }
+        .nav-tabs .nav-link { font-size: 0.8rem; font-weight: 700; color: #5f6368; border: none; }
+        .nav-tabs .nav-link.active { color: var(--primary); border-bottom: 3px solid var(--primary); background: none; }
     </style>
 </head>
 <body class="py-4">
     <div class="container-fluid px-lg-5">
-        <header class="d-flex justify-content-between align-items-center mb-4">
-            <h1 class="h4 fw-bold m-0">🎯 SNIPER COMMAND CENTER <span class="badge bg-primary fs-6">v4.5</span></h1>
+        <header class="d-flex justify-content-between align-items-center mb-5">
+            <div><h1 class="h4 fw-bold m-0">🎯 SNIPER COMMAND CENTER <span class="text-primary">v4.7</span></h1></div>
             <div class="d-flex gap-2">
-                <div id="SPL_hud" class="status-badge">SPL: IDLE</div>
-                <div id="KCLS_hud" class="status-badge">KCLS: IDLE</div>
+                <div id="SPL_hud" class="status-badge shadow-sm">SPL: IDLE</div>
+                <div id="KCLS_hud" class="status-badge shadow-sm">KCLS: IDLE</div>
             </div>
         </header>
 
@@ -36,22 +37,17 @@
             {% for sys in ['SPL', 'KCLS'] %}
             <div class="col-xl-6">
                 <div class="card p-4">
-                    <!-- Tab Header -->
-                    <ul class="nav nav-tabs mb-3" id="{{sys}}Tabs">
-                        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#{{sys}}Mission">Mission Control</button></li>
-                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#{{sys}}Master">Master Lists</button></li>
+                    <ul class="nav nav-tabs mb-4" id="{{sys}}Tabs">
+                        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#{{sys}}Mission">MISSION CONTROL</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#{{sys}}Master">MASTER LISTS</button></li>
                     </ul>
 
                     <div class="tab-content">
-                        <!-- MISSION CONTROL TAB -->
                         <div class="tab-pane fade show active" id="{{sys}}Mission">
+                            <!-- TARGETING ROW -->
                             <div class="row g-2 mb-3">
-                                <div class="col-md-4">
-                                    <label class="form-label">Drop (Local)</label>
-                                    <input type="text" id="{{sys}}_drop_time" class="form-control text-primary fw-bold" value="{{ saved[sys]['drop_time'] }}">
-                                </div>
-                                <div class="col-md-5">
-                                    <label class="form-label">Timezone</label>
+                                <div class="col-md-3"><label class="form-label">Drop Time</label><input type="text" id="{{sys}}_drop_time" class="form-control text-primary fw-bold" value="{{ saved[sys]['drop_time'] }}" placeholder="HH:MM:SS"></div>
+                                <div class="col-md-5"><label class="form-label">Timezone</label>
                                     <select id="{{sys}}_timezone" class="form-select">
                                         <option value="America/Los_Angeles">Pacific (PST/PDT)</option>
                                         <option value="America/New_York">Eastern (EST/EDT)</option>
@@ -59,19 +55,11 @@
                                         <option value="UTC">UTC</option>
                                     </select>
                                 </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Mode</label>
-                                    <select id="{{sys}}_app_mode" class="form-select">
-                                        <option value="booking" {% if saved[sys]['app_mode']=='booking' %}selected{% endif %}>BOOK</option>
-                                        <option value="alert" {% if saved[sys]['app_mode']=='alert' %}selected{% endif %}>ALERT</option>
-                                    </select>
-                                </div>
+                                <div class="col-md-4"><label class="form-label">Workflow YAML</label><input type="text" id="{{sys}}_workflow_file" class="form-control" value="{{ saved[sys]['workflow_file'] }}"></div>
                             </div>
 
-                            <div class="section-header">Target Selection</div>
-                            <div id="{{sys}}_museum_selector" class="mb-3 p-2 border rounded bg-light">
-                                <small class="text-muted">Fill 'Master Lists' to see options...</small>
-                            </div>
+                            <div class="section-header">Target Selection (Tap to: Monitor > Auto-Book)</div>
+                            <div id="{{sys}}_museum_selector" class="mb-3 p-3 border rounded bg-light min-vh-10"></div>
 
                             <div class="section-header">Auto-Book Days</div>
                             <div id="{{sys}}_days_selector" class="mb-3">
@@ -80,44 +68,52 @@
                                 {% endfor %}
                             </div>
 
-                            <!-- HIDDEN INPUTS (Built dynamically by JS) -->
-                            <input type="hidden" id="{{sys}}_museum_config" value="{{ saved[sys]['museum_config'] }}">
-                            <input type="hidden" id="{{sys}}_museum_ids" value="{{ saved[sys]['museum_ids'] }}">
-                            <input type="hidden" id="{{sys}}_priority_museums" value="{{ saved[sys]['priority_museums'] }}">
-                            <input type="hidden" id="{{sys}}_auto_book_days" value="{{ saved[sys]['auto_book_days'] }}">
-                            <input type="hidden" id="{{sys}}_workflow_file" value="{{ saved[sys]['workflow_file'] }}">
-                            <input type="hidden" id="{{sys}}_base_url" value="{{ saved[sys]['base_url'] }}">
-                            <input type="hidden" id="{{sys}}_lib_user" value="{{ saved[sys]['lib_user'] }}">
-                            <input type="hidden" id="{{sys}}_lib_pass" value="{{ saved[sys]['lib_pass'] }}">
-                            <input type="hidden" id="{{sys}}_ntfy_topic" value="{{ saved[sys]['ntfy_topic'] }}">
-                            <input type="hidden" id="{{sys}}_patron_email" value="{{ saved[sys]['patron_email'] }}">
-                            <input type="hidden" id="{{sys}}_strike_minutes" value="{{ saved[sys]['strike_minutes'] }}">
-                            <input type="hidden" id="{{sys}}_offset_ms" value="{{ saved[sys]['offset_ms'] }}">
+                            <div class="section-header">Authentication & Tuning</div>
+                            <div class="row g-2">
+                                <div class="col-4"><label class="form-label">Lib User</label><input type="text" id="{{sys}}_lib_user" class="form-control" value="{{ saved[sys]['lib_user'] }}"></div>
+                                <div class="col-4"><label class="form-label">Lib Pass</label><input type="password" id="{{sys}}_lib_pass" class="form-control" value="{{ saved[sys]['lib_pass'] }}"></div>
+                                <div class="col-4"><label class="form-label">Ntfy Topic</label><input type="text" id="{{sys}}_ntfy_topic" class="form-control" value="{{ saved[sys]['ntfy_topic'] }}"></div>
+                            </div>
+                            
+                            {% if sys == 'SPL' %}
+                            <div class="mt-2"><label class="form-label text-danger">Patron Email (Required for SPL Booking)</label><input type="text" id="{{sys}}_patron_email" class="form-control border-danger" value="{{ saved[sys]['patron_email'] }}"></div>
+                            {% endif %}
+
+                            <div class="row g-2 mt-3">
+                                <div class="col-4"><label class="form-label">Mode</label>
+                                    <select id="{{sys}}_app_mode" class="form-select">
+                                        <option value="booking" {% if saved[sys]['app_mode']=='booking' %}selected{% endif %}>STRIKE</option>
+                                        <option value="alert" {% if saved[sys]['app_mode']=='alert' %}selected{% endif %}>SCOUT</option>
+                                    </select>
+                                </div>
+                                <div class="col-4"><label class="form-label">Mins</label><input type="text" id="{{sys}}_strike_minutes" class="form-control" value="{{ saved[sys]['strike_minutes'] }}"></div>
+                                <div class="col-4"><label class="form-label">Offset MS</label><input type="text" id="{{sys}}_offset_ms" class="form-control" value="{{ saved[sys]['offset_ms'] }}"></div>
+                            </div>
 
                             <div class="d-flex gap-2 mt-4">
-                                <button onclick="save('{{sys}}')" class="btn btn-primary flex-grow-1 fw-bold">SYNC & SCHEDULE</button>
-                                <button onclick="clearSchedule('{{sys}}')" class="btn btn-outline-secondary">CLEAR</button>
-                                <button onclick="runNow('{{sys}}')" class="btn btn-danger">FIRE NOW</button>
+                                <button onclick="save('{{sys}}')" class="btn btn-primary fw-bold flex-grow-1">SYNC & ARM</button>
+                                <button onclick="clearSchedule('{{sys}}')" class="btn btn-outline-secondary fw-bold">CLEAR</button>
+                                <button onclick="runNow('{{sys}}')" class="btn btn-danger fw-bold">FIRE NOW</button>
                             </div>
+
+                            <input type="hidden" id="{{sys}}_base_url" value="{{ saved[sys]['base_url'] }}">
                         </div>
 
-                        <!-- MASTER LISTS TAB -->
-                        <div class="tab-pane fade" id="{{sys}}Master">
+                        <div class="tab-pane fade" id="{{sys}Master">
                             <div class="mb-3">
-                                <label class="form-label">Mapping Master (Name:ID or ID:Name)</label>
-                                <textarea id="{{sys}}_raw_config" class="form-control" rows="5" placeholder="Burke:ade0... , Henry:d22b...">{{ masters[sys]['raw_config'] }}</textarea>
+                                <label class="form-label">Mapping Master (ID:Name or Name:ID)</label>
+                                <textarea id="{{sys}}_raw_config" class="form-control" rows="5" placeholder="SPL Format: Name:ID&#10;KCLS Format: ID:Name">{{ masters[sys]['raw_config'] }}</textarea>
                             </div>
                             {% if sys == 'SPL' %}
                             <div class="mb-3">
                                 <label class="form-label">Slug Mapping (Name:Slug)</label>
-                                <textarea id="{{sys}}_raw_slugs" class="form-control" rows="5" placeholder="Burke:Burke , Henry:Henry">{{ masters[sys]['raw_slugs'] }}</textarea>
+                                <textarea id="{{sys}}_raw_slugs" class="form-control" rows="5" placeholder="Burke:Burke">{{ masters[sys]['raw_slugs'] }}</textarea>
                             </div>
                             {% endif %}
-                            <button onclick="updateMaster('{{sys}}')" class="btn btn-dark btn-sm w-100">UPDATE SELECTORS</button>
+                            <button onclick="updateMaster('{{sys}}')" class="btn btn-dark btn-sm w-100 fw-bold">REGENERATE SELECTORS</button>
                         </div>
                     </div>
-
-                    <div id="{{sys}}_log" class="log-terminal mt-3">READY.</div>
+                    <div id="{{sys}}_log" class="log-terminal mt-4">TERMINAL STANDBY...</div>
                 </div>
             </div>
             {% endfor %}
@@ -132,7 +128,7 @@
         };
 
         function parseConfig(raw) {
-            const map = {};
+            const map = {}; if(!raw) return map;
             raw.split(',').forEach(item => {
                 const parts = item.split(':');
                 if (parts.length === 2) map[parts[0].trim()] = parts[1].trim();
@@ -142,93 +138,63 @@
 
         function updateSelectors(sys) {
             const container = document.getElementById(sys + '_museum_selector');
-            const rawConfig = document.getElementById(sys + '_raw_config').value;
-            const rawSlugs = document.getElementById(sys + '_raw_slugs')?.value || "";
-            
-            const configMap = parseConfig(rawConfig);
+            const mapping = parseConfig(document.getElementById(sys + '_raw_config').value);
             container.innerHTML = '';
+            const names = (sys === 'KCLS') ? Object.values(mapping) : Object.keys(mapping);
+            const reverse = (sys === 'KCLS') ? Object.fromEntries(Object.entries(mapping).map(([k,v])=>[v,k])) : null;
 
-            Object.keys(configMap).forEach(name => {
+            names.forEach(name => {
+                const id = (sys === 'KCLS') ? reverse[name] : name;
                 const pill = document.createElement('div');
-                pill.className = 'museum-pill';
-                pill.innerText = name;
-                
-                // Click logic: Select -> Priority -> Unselect
+                pill.className = 'museum-pill'; pill.innerText = name; pill.id = `${sys}_pill_${id}`;
                 pill.onclick = () => {
-                    if (state[sys].priority.has(name)) {
-                        state[sys].priority.delete(name);
-                        state[sys].selected.delete(name);
-                    } else if (state[sys].selected.has(name)) {
-                        state[sys].priority.add(name);
-                    } else {
-                        state[sys].selected.add(name);
-                    }
-                    renderPills(sys);
+                    if (state[sys].priority.has(id)) { state[sys].priority.delete(id); state[sys].selected.delete(id); }
+                    else if (state[sys].selected.has(id)) { state[sys].priority.add(id); }
+                    else { state[sys].selected.add(id); }
+                    renderPills(sys, mapping);
                 };
-                pill.id = `${sys}_pill_${name}`;
                 container.appendChild(pill);
             });
-            renderPills(sys);
+            renderPills(sys, mapping);
         }
 
-        function renderPills(sys) {
-            const rawConfig = document.getElementById(sys + '_raw_config').value;
-            const configMap = parseConfig(rawConfig);
-            Object.keys(configMap).forEach(name => {
-                const el = document.getElementById(`${sys}_pill_${name}`);
-                if (!el) return;
+        function renderPills(sys, mapping) {
+            Object.keys(mapping).forEach(id => {
+                const el = document.getElementById(`${sys}_pill_${id}`); if(!el) return;
                 el.className = 'museum-pill';
-                if (state[sys].selected.has(name)) el.classList.add('selected');
-                if (state[sys].priority.has(name)) el.classList.add('priority');
+                if(state[sys].selected.has(id)) el.classList.add('selected');
+                if(state[sys].priority.has(id)) el.classList.add('priority');
             });
         }
 
         function toggleDay(sys, day) {
             const el = document.getElementById(`${sys}_day_${day}`);
-            if (state[sys].days.has(day)) {
-                state[sys].days.delete(day);
-                el.classList.remove('active');
-            } else {
-                state[sys].days.add(day);
-                el.classList.add('active');
-            }
+            if (state[sys].days.has(day)) { state[sys].days.delete(day); el.classList.remove('active'); }
+            else { state[sys].days.add(day); el.classList.add('active'); }
         }
 
         async function updateMaster(sys) {
             const raw_config = document.getElementById(sys + '_raw_config').value;
             const raw_slugs = document.getElementById(sys + '_raw_slugs')?.value || "";
-            await fetch('/save_master', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({system: sys, raw_config, raw_slugs})
-            });
+            await fetch('/save_master', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({system: sys, raw_config, raw_slugs})});
             updateSelectors(sys);
-            document.getElementById(sys + '_log').innerText = "Selectors Updated.";
         }
 
         async function save(sys) {
-            const logBox = document.getElementById(sys + '_log');
-            logBox.innerText = "Building Configuration...";
+            const logBox = document.getElementById(sys + '_log'); logBox.innerText = "Syncing...";
+            const rawConfigMap = parseConfig(document.getElementById(sys + '_raw_config').value);
+            const rawSlugsMap = sys === 'SPL' ? parseConfig(document.getElementById(sys + '_raw_slugs').value) : null;
             
-            const rawConfig = parseConfig(document.getElementById(sys + '_raw_config').value);
-            const rawSlugs = sys === 'SPL' ? parseConfig(document.getElementById(sys + '_raw_slugs').value) : null;
-            
-            let museumConfig = [];
-            let museumIds = [];
-            let priorityList = [];
-
-            state[sys].selected.forEach(name => {
+            let mConfig = [], mIds = [], pList = [];
+            state[sys].selected.forEach(idOrName => {
                 if (sys === 'SPL') {
-                    const slug = rawSlugs[name];
-                    const id = rawConfig[name];
-                    museumConfig.push(`${slug}:${name}`);
-                    museumIds.push(`${slug}:${id}`);
-                    if (state[sys].priority.has(name)) priorityList.push(slug);
+                    const name = idOrName, slug = rawSlugsMap[name], techID = rawConfigMap[name];
+                    mConfig.push(`${slug}:${name}`); mIds.push(`${slug}:${techID}`);
+                    if(state[sys].priority.has(name)) pList.push(slug);
                 } else {
-                    const id = name; // For KCLS, Name is the ID in the ID:Name provided
-                    const displayName = rawConfig[name];
-                    museumConfig.push(`${id}:${displayName}`);
-                    if (state[sys].priority.has(name)) priorityList.push(id);
+                    const id = idOrName, name = rawConfigMap[id];
+                    mConfig.push(`${id}:${name}`);
+                    if(state[sys].priority.has(id)) pList.push(id);
                 }
             });
 
@@ -237,56 +203,41 @@
                 base_url: document.getElementById(sys + '_base_url').value,
                 lib_user: document.getElementById(sys + '_lib_user').value,
                 lib_pass: document.getElementById(sys + '_lib_pass').value,
-                patron_email: document.getElementById(sys + '_patron_email').value,
+                patron_email: document.getElementById(sys + '_patron_email')?.value || "",
                 ntfy_topic: document.getElementById(sys + '_ntfy_topic').value,
                 drop_time: document.getElementById(sys + '_drop_time').value,
                 app_mode: document.getElementById(sys + '_app_mode').value,
-                priority_museums: priorityList.join(','),
+                priority_museums: pList.join(','),
                 auto_book_days: Array.from(state[sys].days).join(','),
-                museum_config: museumConfig.join(','),
-                museum_ids: museumIds.join(','),
+                museum_config: mConfig.join(','),
+                museum_ids: mIds.join(','),
                 strike_minutes: document.getElementById(sys + '_strike_minutes').value,
                 offset_ms: document.getElementById(sys + '_offset_ms').value
             };
 
-            const tz = document.getElementById(sys + '_timezone').value;
-            const res = await fetch('/save', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({system: sys, SECRETS: secrets, timezone: tz})
-            });
-            const out = await res.json();
-            logBox.innerText = out.status;
-            updateHud();
+            const res = await fetch('/save', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({system: sys, SECRETS: secrets, timezone: document.getElementById(sys + '_timezone').value})});
+            const out = await res.json(); logBox.innerText = out.status; updateHud();
         }
 
         async function clearSchedule(sys) {
             const res = await fetch('/clear', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({system: sys})});
-            const out = await res.json();
-            document.getElementById(sys + '_log').innerText = out.status;
-            updateHud();
+            const out = await res.json(); document.getElementById(sys + '_log').innerText = out.status; updateHud();
         }
 
         async function runNow(sys) {
-            const workflow = document.getElementById(sys+'_workflow_file').value;
-            const res = await fetch('/run_now', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({system: sys, workflow_file: workflow})});
-            const out = await res.json();
-            document.getElementById(sys+'_log').innerText = out.status;
+            const res = await fetch('/run_now', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({system: sys, workflow_file: document.getElementById(sys+'_workflow_file').value})});
+            const out = await res.json(); document.getElementById(sys+'_log').innerText = out.status;
         }
 
         async function updateHud() {
-            const res = await fetch('/status');
-            const data = await res.json();
-            document.getElementById('SPL_hud').innerText = "SPL: " + data.SPL;
-            document.getElementById('KCLS_hud').innerText = "KCLS: " + data.KCLS;
+            try {
+                const res = await fetch('/status'); const data = await res.json();
+                document.getElementById('SPL_hud').innerText = "SPL: " + data.SPL;
+                document.getElementById('KCLS_hud').innerText = "KCLS: " + data.KCLS;
+            } catch(e) {}
         }
 
-        window.onload = () => { 
-            updateSelectors('SPL'); 
-            updateSelectors('KCLS'); 
-            updateHud();
-            setInterval(updateHud, 5000);
-        };
+        window.onload = () => { updateSelectors('SPL'); updateSelectors('KCLS'); updateHud(); setInterval(updateHud, 5000); };
     </script>
 </body>
 </html>
