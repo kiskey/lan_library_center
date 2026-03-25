@@ -3,31 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sniper HQ v5.0</title>
+    <title>Sniper HQ v5.1</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        :root { --bg: #f8f9fa; --primary: #1a73e8; --danger: #d93025; --terminal: #202124; }
+        :root { --bg: #f0f2f5; --primary: #1a73e8; --danger: #d93025; --terminal: #202124; }
         body { background-color: var(--bg); color: #202124; font-family: 'Segoe UI', system-ui, sans-serif; }
         .card { border: none; border-radius: 12px; box-shadow: 0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15); margin-bottom: 24px; }
         .form-label { font-size: 0.65rem; color: #5f6368; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
         .form-control, .form-select { border: 1px solid #dadce0; border-radius: 6px; font-size: 0.85rem; padding: 6px 10px; }
-        .log-terminal { background: var(--terminal); color: #00ff41; font-family: 'Consolas', monospace; font-size: 0.7rem; height: 110px; overflow-y: auto; padding: 12px; border-radius: 6px; }
-        .status-badge { background: #e8f0fe; color: var(--primary); padding: 6px 16px; font-weight: 700; border-radius: 30px; font-size: 0.85rem; border: 1px solid #c2e7ff; }
-        .section-header { color: var(--primary); font-size: 0.8rem; font-weight: 800; border-bottom: 2px solid #e8f0fe; margin: 18px 0 10px 0; padding-bottom: 3px; text-transform: uppercase; }
-        .day-btn { font-size: 0.65rem; padding: 6px 10px; margin: 2px; border: 1px solid #dadce0; cursor: pointer; border-radius: 6px; background: white; transition: 0.2s; }
+        .log-terminal { background: var(--terminal); color: #00ff41; font-family: 'Consolas', monospace; font-size: 0.7rem; height: 110px; overflow-y: auto; padding: 10px; border-radius: 6px; line-height: 1.3; }
+        .status-badge { background: #e8f0fe; color: var(--primary); padding: 6px 14px; font-weight: 700; border-radius: 30px; font-size: 0.8rem; border: 1px solid #c2e7ff; }
+        .section-header { color: var(--primary); font-size: 0.75rem; font-weight: 800; border-bottom: 2px solid #e8f0fe; margin: 18px 0 10px 0; padding-bottom: 3px; text-transform: uppercase; }
+        .day-btn { font-size: 0.65rem; padding: 5px 8px; margin: 1px; border: 1px solid #dadce0; cursor: pointer; border-radius: 4px; background: white; }
         .day-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
-        .museum-pill { font-size: 0.75rem; padding: 6px 14px; margin: 4px; border-radius: 20px; border: 1px solid #dadce0; display: inline-block; cursor: pointer; user-select: none; background: white; transition: 0.2s; }
+        .museum-pill { font-size: 0.7rem; padding: 5px 12px; margin: 3px; border-radius: 15px; border: 1px solid #dadce0; display: inline-block; cursor: pointer; user-select: none; background: white; transition: 0.2s; }
         .museum-pill.selected { background: #e8f0fe; border-color: var(--primary); color: var(--primary); font-weight: 700; }
         .museum-pill.priority { border: 2px solid var(--danger); background: #fce8e6; color: var(--danger); }
-        .nav-tabs .nav-link { font-size: 0.85rem; font-weight: 700; color: #5f6368; border: none; }
+        .nav-tabs .nav-link { font-size: 0.8rem; font-weight: 700; color: #5f6368; border: none; }
         .nav-tabs .nav-link.active { color: var(--primary); border-bottom: 3px solid var(--primary); background: none; }
     </style>
 </head>
 <body class="py-4">
     <div class="container-fluid px-lg-5">
         <header class="d-flex justify-content-between align-items-center mb-5">
-            <div><h1 class="h4 fw-bold m-0 text-dark">🎯 SNIPER COMMAND CENTER <span class="text-primary">v5.0</span></h1></div>
-            <div class="d-flex gap-3">
+            <div><h1 class="h4 fw-bold m-0 text-dark">🎯 SNIPER COMMAND CENTER <span class="text-primary">v5.1</span></h1></div>
+            <div class="d-flex gap-2">
                 <div id="SPL_hud" class="status-badge shadow-sm">SPL: IDLE</div>
                 <div id="KCLS_hud" class="status-badge shadow-sm">KCLS: IDLE</div>
             </div>
@@ -43,28 +43,29 @@
                     </ul>
 
                     <div class="tab-content">
-                        <!-- MISSION CONTROL TAB -->
                         <div class="tab-pane fade show active" id="{{sys}}Mission">
+                            <!-- TARGETING -->
                             <div class="row g-2 mb-3">
-                                <div class="col-md-4"><label class="form-label">Drop Time</label><input type="text" id="{{sys}}_drop_time" class="form-control text-primary fw-bold" value="{{ saved[sys]['drop_time'] }}"></div>
+                                <div class="col-md-3"><label class="form-label">Drop Time</label><input type="text" id="{{sys}}_drop_time" class="form-control text-primary fw-bold" value="{{ saved[sys]['drop_time'] }}" placeholder="HH:MM:SS"></div>
                                 <div class="col-md-5"><label class="form-label">Timezone</label>
                                     <select id="{{sys}}_timezone" class="form-select">
                                         <option value="America/Los_Angeles">Pacific (PST/PDT)</option>
                                         <option value="America/Denver">Mountain (MST/MDT)</option>
+                                        <option value="America/Chicago">Central (CST/CDT)</option>
                                         <option value="America/New_York">Eastern (EST/EDT)</option>
                                         <option value="Asia/Kolkata">India (IST)</option>
                                         <option value="UTC">UTC</option>
                                     </select>
                                 </div>
-                                <div class="col-md-3"><label class="form-label">Mode</label>
+                                <div class="col-md-4"><label class="form-label">Mode</label>
                                     <select id="{{sys}}_app_mode" class="form-select">
-                                        <option value="booking" {% if saved[sys]['app_mode']=='booking' %}selected{% endif %}>STRIKE</option>
-                                        <option value="alert" {% if saved[sys]['app_mode']=='alert' %}selected{% endif %}>SCOUT</option>
+                                        <option value="booking" {% if saved[sys]['app_mode']=='booking' %}selected{% endif %}>STRIKE (AUTO-BOOK)</option>
+                                        <option value="alert" {% if saved[sys]['app_mode']=='alert' %}selected{% endif %}>SCOUT (ALERT ONLY)</option>
                                     </select>
                                 </div>
                             </div>
 
-                            <div class="section-header">Target Selection</div>
+                            <div class="section-header">Target Selection (Scout > Strike)</div>
                             <div id="{{sys}}_museum_selector" class="mb-3 p-3 border rounded bg-light min-vh-10"></div>
 
                             <div class="section-header">Auto-Book Days</div>
@@ -74,11 +75,11 @@
                                 {% endfor %}
                             </div>
 
-                            <div class="section-header">Authentication & Tuning</div>
+                            <div class="section-header">Account Credentials</div>
                             <div class="row g-2">
                                 <div class="col-4"><label class="form-label">User</label><input type="text" id="{{sys}}_lib_user" class="form-control" value="{{ saved[sys]['lib_user'] }}"></div>
                                 <div class="col-4"><label class="form-label">Pass</label><input type="password" id="{{sys}}_lib_pass" class="form-control" value="{{ saved[sys]['lib_pass'] }}"></div>
-                                <div class="col-4"><label class="form-label">Ntfy</label><input type="text" id="{{sys}}_ntfy_topic" class="form-control" value="{{ saved[sys]['ntfy_topic'] }}"></div>
+                                <div class="col-4"><label class="form-label">Ntfy Topic</label><input type="text" id="{{sys}}_ntfy_topic" class="form-control" value="{{ saved[sys]['ntfy_topic'] }}"></div>
                             </div>
                             
                             {% if sys == 'SPL' %}
@@ -93,19 +94,17 @@
                             <div class="d-flex gap-2 mt-4">
                                 <button onclick="save('{{sys}}')" class="btn btn-primary fw-bold flex-grow-1">SYNC & ARM CLOUD</button>
                                 <button onclick="clearSchedule('{{sys}}')" class="btn btn-outline-secondary fw-bold">ABORT</button>
-                                <button onclick="runNow('{{sys}}')" class="btn btn-danger fw-bold">FORCE RUN</button>
+                                <button onclick="runNow('{{sys}}')" class="btn btn-danger fw-bold">FIRE NOW</button>
                             </div>
                         </div>
 
-                        <!-- MASTER LISTS TAB -->
                         <div class="tab-pane fade" id="{{sys}}Master">
                             <div class="section-header">Infrastructure Settings</div>
                             <div class="row g-2 mb-3">
                                 <div class="col-md-8"><label class="form-label">Base URL</label><input type="text" id="{{sys}}_base_url" class="form-control" value="{{ saved[sys]['base_url'] }}"></div>
                                 <div class="col-md-4"><label class="form-label">Workflow YAML</label><input type="text" id="{{sys}}_workflow_file" class="form-control" value="{{ saved[sys]['workflow_file'] }}"></div>
                             </div>
-
-                            <div class="section-header">Reference Mappings</div>
+                            <div class="section-header">Museum Reference Lists</div>
                             <div class="mb-3">
                                 <label class="form-label">Mapping Master (ID:Name or Name:ID)</label>
                                 <textarea id="{{sys}}_raw_config" class="form-control" rows="4">{{ masters[sys]['raw_config'] }}</textarea>
@@ -120,12 +119,12 @@
                         </div>
                     </div>
 
-                    <!-- Hidden strings for JS parsing -->
+                    <!-- Persistent Hidden fields for Hydration -->
                     <input type="hidden" id="{{sys}}_h_config" value="{{ saved[sys]['museum_config'] }}">
                     <input type="hidden" id="{{sys}}_h_priority" value="{{ saved[sys]['priority_museums'] }}">
                     <input type="hidden" id="{{sys}}_h_days" value="{{ saved[sys]['auto_book_days'] }}">
 
-                    <div id="{{sys}}_log" class="log-terminal mt-4 shadow-sm">TERMINAL READY > WAITING</div>
+                    <div id="{{sys}}_log" class="log-terminal mt-4 shadow-sm">TERMINAL READY</div>
                 </div>
             </div>
             {% endfor %}
@@ -134,7 +133,10 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const state = { SPL: { selected: new Set(), priority: new Set(), days: new Set() }, KCLS: { selected: new Set(), priority: new Set(), days: new Set() } };
+        const state = { 
+            SPL: { selected: new Set(), priority: new Set(), days: new Set() }, 
+            KCLS: { selected: new Set(), priority: new Set(), days: new Set() } 
+        };
 
         function parseConfig(raw) {
             const map = {}; if(!raw) return map;
@@ -142,23 +144,37 @@
             return map;
         }
 
-        // --- FEATURE: UI HYDRATION ---
+        // --- HYDRATION LOGIC (FIXED FOR SPL) ---
         function hydrateState(sys) {
-            // 1. Hydrate Selected/Priority
             const h_config = document.getElementById(sys + '_h_config').value;
             const h_priority = document.getElementById(sys + '_h_priority').value;
+            const h_days = document.getElementById(sys + '_h_days').value;
             
+            // Standardize: For KCLS we track IDs. For SPL we track Names (to match raw_slug mapping).
             if(h_config) {
                 h_config.split(',').forEach(pair => {
-                    const id = pair.split(':')[0]; if(id) state[sys].selected.add(id);
+                    const parts = pair.split(':');
+                    if (sys === 'SPL') {
+                        const name = parts[1]; // Format: slug:Name
+                        if(name) state[sys].selected.add(name);
+                    } else {
+                        const id = parts[0]; // Format: ID:Name
+                        if(id) state[sys].selected.add(id);
+                    }
                 });
             }
             if(h_priority) {
-                h_priority.split(',').forEach(id => { if(id) state[sys].priority.add(id); });
+                h_priority.split(',').forEach(item => {
+                    if (sys === 'SPL') {
+                        // For SPL, h_priority contains slugs. We need to find the Name.
+                        const slugMap = parseConfig(document.getElementById('SPL_raw_slugs').value);
+                        const name = Object.keys(slugMap).find(k => slugMap[k] === item);
+                        if(name) state[sys].priority.add(name);
+                    } else {
+                        if(item) state[sys].priority.add(item);
+                    }
+                });
             }
-
-            // 2. Hydrate Days
-            const h_days = document.getElementById(sys + '_h_days').value;
             if(h_days) {
                 h_days.split(',').forEach(day => {
                     state[sys].days.add(day);
@@ -214,7 +230,7 @@
         }
 
         async function save(sys) {
-            const logBox = document.getElementById(sys + '_log'); logBox.innerText = "PRE-FLIGHT CHECK IN PROGRESS...";
+            const logBox = document.getElementById(sys + '_log'); logBox.innerText = "PRE-FLIGHT CHECK...";
             const rawConfigMap = parseConfig(document.getElementById(sys + '_raw_config').value);
             const rawSlugsMap = sys === 'SPL' ? parseConfig(document.getElementById(sys + '_raw_slugs').value) : null;
             
@@ -249,9 +265,13 @@
             };
 
             try {
-                const res = await fetch('/save', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({system: sys, SECRETS: secrets, timezone: document.getElementById(sys + '_timezone').value})});
+                const res = await fetch('/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({system: sys, SECRETS: secrets, timezone: document.getElementById(sys + '_timezone').value})
+                });
                 const out = await res.json(); logBox.innerText = out.status; updateHud();
-            } catch(e) { logBox.innerText = "FAILED: Verify GitHub Secrets/PAT settings."; }
+            } catch(e) { logBox.innerText = "Error: Check Docker Logs."; }
         }
 
         async function clearSchedule(sys) {
@@ -260,8 +280,7 @@
         }
 
         async function runNow(sys) {
-            const workflow = document.getElementById(sys+'_workflow_file').value;
-            const res = await fetch('/run_now', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({system: sys, workflow_file: workflow})});
+            const res = await fetch('/run_now', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({system: sys, workflow_file: document.getElementById(sys+'_workflow_file').value})});
             const out = await res.json(); document.getElementById(sys+'_log').innerText = out.status;
         }
 
