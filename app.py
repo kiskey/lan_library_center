@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 
 app = Flask(__name__)
 DB_PATH = "/app/data/sniper.db"
+
 # PERSISTENCE: Ensures schedules survive Docker restarts
 jobstores = {'default': SQLAlchemyJobStore(url=f'sqlite:///{DB_PATH}')}
 scheduler = BackgroundScheduler(jobstores=jobstores)
@@ -55,14 +56,9 @@ def update_gh_secrets(system, s):
     auth = GH_AUTH[system]
     headers = {"Authorization": f"Bearer {auth['token']}", "Accept": "application/vnd.github+json"}
     url_base = f"https://api.github.com/repos/{auth['owner']}/{auth['repo']}/actions/secrets"
-    
     try:
-        # --- FEATURE: PRE-FLIGHT CHECK ---
         pk_r = requests.get(f"{url_base}/public-key", headers=headers, timeout=7)
-        if pk_r.status_code == 401: return "ERROR: GitHub Token Unauthorized (401)"
-        if pk_r.status_code == 404: return f"ERROR: Repo '{auth['repo']}' not found (404)"
-        if pk_r.status_code != 200: return f"ERROR: GitHub API Refused ({pk_r.status_code})"
-        
+        if pk_r.status_code != 200: return f"ERROR: GH Auth/Repo Issue ({pk_r.status_code})"
         pk_data = pk_r.json()
         for key in SECRET_KEYS:
             val = s.get(key.lower(), "")
@@ -70,8 +66,7 @@ def update_gh_secrets(system, s):
             enc_val = encrypt_secret(pk_data['key'], str(val))
             requests.put(f"{url_base}/{key}", headers=headers, json={"encrypted_value": enc_val, "key_id": pk_data['key_id']}, timeout=10)
         return "SYNC_SUCCESS"
-    except Exception as e:
-        return f"CRITICAL: Connection Timeout ({str(e)})"
+    except Exception as e: return f"CRITICAL: GH Timeout ({str(e)})"
 
 def trigger_dispatch(system, workflow_file):
     auth = GH_AUTH[system]
@@ -93,14 +88,12 @@ def save_master():
     conn = get_db_connection()
     conn.execute('UPDATE master_lists SET raw_config=?, raw_slugs=? WHERE system=?', (data['raw_config'], data.get('raw_slugs', ''), data['system']))
     conn.commit(); conn.close()
-    return jsonify({"status": "Master List Updated."})
+    return jsonify({"status": "Master Mappings Persisted."})
 
 @app.route('/save', methods=['POST'])
 def save():
     data = request.json
     system, s, tz_name = data['system'], data['SECRETS'], data.get('timezone', 'UTC')
-    
-    # 1. Update SQLite (Persistence)
     conn = get_db_connection()
     conn.execute('''UPDATE configs SET workflow_file=?, base_url=?, lib_user=?, lib_pass=?, 
         patron_email=?, ntfy_topic=?, drop_time=?, app_mode=?, priority_museums=?, 
@@ -109,32 +102,22 @@ def save():
          s.get('ntfy_topic'), s.get('drop_time'), s.get('app_mode'), s.get('priority_museums'), s.get('auto_book_days'), 
          s.get('museum_config'), s.get('museum_ids'), s.get('strike_minutes'), s.get('offset_ms'), system))
     conn.commit(); conn.close()
-
-    # 2. Timezone Engine
     try:
         local_tz = pytz.timezone(tz_name)
-        dt_obj = datetime.strptime(s['drop_time'], "%H:%M:%S")
+        drop_time_obj = datetime.strptime(s['drop_time'], "%H:%M:%S")
         now_local = datetime.now(local_tz)
-        local_dt = local_tz.localize(datetime(now_local.year, now_local.month, now_local.day, dt_obj.hour, dt_obj.minute, dt_obj.second))
+        local_dt = local_tz.localize(datetime(now_local.year, now_local.month, now_local.day, drop_time_obj.hour, drop_time_obj.minute, drop_time_obj.second))
         if local_dt < datetime.now(local_tz): local_dt += timedelta(days=1)
         utc_dt = local_dt.astimezone(pytz.UTC)
-        
         s_gh = s.copy(); s_gh['drop_time'] = utc_dt.strftime("%H:%M:%S")
-        
-        # 3. Pre-Flight Check & Sync
         gh_status = update_gh_secrets(system, s_gh)
-        if "ERROR" in gh_status or "CRITICAL" in gh_status:
-            return jsonify({"status": gh_status}), 400
-
-        # 4. Schedule Persistence
+        if "ERROR" in gh_status or "CRITICAL" in gh_status: return jsonify({"status": gh_status}), 400
         trigger_dt = utc_dt - timedelta(minutes=5)
         job_id = f"trigger_{system}"
         if scheduler.get_job(job_id): scheduler.remove_job(job_id)
         scheduler.add_job(trigger_dispatch, 'date', run_date=trigger_dt, args=[system, s['workflow_file']], id=job_id, misfire_grace_time=3600)
-        
         return jsonify({"status": f"SUCCESS: Cloud Armed. Triggering at {trigger_dt.strftime('%H:%M:%S')} UTC"})
-    except Exception as e:
-        return jsonify({"status": f"Local Save OK. Sched Fail: {str(e)}"}), 400
+    except Exception as e: return jsonify({"status": f"Local Save OK. Sched Fail: {str(e)}"}), 400
 
 @app.route('/clear', methods=['POST'])
 def clear_schedule():
@@ -145,13 +128,6 @@ def clear_schedule():
 
 @app.route('/run_now', methods=['POST'])
 def run_now():
-    # Pre-Flight Check before Manual run
-    conn = get_db_connection()
-    row = conn.execute('SELECT * FROM configs WHERE system=?', (request.json['system'],)).fetchone()
-    conn.close()
-    gh_status = update_gh_secrets(request.json['system'], dict(row))
-    if "ERROR" in gh_status: return jsonify({"status": gh_status}), 400
-    
     trigger_dispatch(request.json['system'], request.json['workflow_file'])
     return jsonify({"status": "Cloud Runner Dispatched."})
 
